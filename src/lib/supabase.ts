@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+// Supabase 가 anon 키를 publishable 키로 바꿔 부르고 있어 두 이름을 모두 받는다
+const key = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY) as string | undefined;
 
 /** 환경 변수가 없으면 null — 앱은 이 기기에만 저장하는 모드로 그대로 동작한다. */
 export const supabase =

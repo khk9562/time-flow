@@ -23,7 +23,7 @@ npm run dev
 1. [Supabase](https://supabase.com) 에서 프로젝트를 만든다.
 2. SQL Editor 에 [`supabase/schema.sql`](supabase/schema.sql) 을 붙여 넣고 실행한다.
 3. Authentication → URL Configuration 의 Site URL / Redirect URLs 에 앱 주소(개발 중에는 `http://localhost:5190`)를 넣는다.
-4. `.env.example` 을 `.env.local` 로 복사하고 Project URL 과 anon(public) 키를 채운 뒤 개발 서버를 다시 띄운다.
+4. `.env.example` 을 `.env.local` 로 복사하고 Project URL 과 publishable 키(예전 이름: anon 키)를 채운 뒤 개발 서버를 다시 띄운다.
 
 같은 항목(하루 / 한 해 계획)을 여러 기기에서 고치면 나중에 고친 쪽이 남는다. 오프라인에서 쓴 기록은 기기에 보관했다가 연결되면 올라간다. 설계 결정은 [DESIGN.md](DESIGN.md) 참고.
 
