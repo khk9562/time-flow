@@ -23,6 +23,7 @@ const s = stylex.create({
     position: 'fixed',
     inset: 0,
     zIndex: 5,
+    paddingTop: 'env(safe-area-inset-top)',
     overflowY: 'auto',
     overscrollBehavior: 'contain',
     transitionProperty: 'opacity, transform',

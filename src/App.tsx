@@ -17,7 +17,15 @@ import { color, dur, ease } from './tokens.stylex';
 const IDLE_MS = 45000;
 
 const s = stylex.create({
-  app: { position: 'relative', display: 'flex', height: '100dvh', overflow: 'hidden', color: color.ink },
+  // 홈 화면 앱(전체 화면)에서는 상태 표시줄 아래로 내용이 들어가지 않게 위쪽을 비운다
+  app: {
+    position: 'relative',
+    display: 'flex',
+    height: '100dvh',
+    paddingTop: 'env(safe-area-inset-top)',
+    overflow: 'hidden',
+    color: color.ink,
+  },
   stage: {
     position: 'relative',
     zIndex: 1,
@@ -84,7 +92,7 @@ const s = stylex.create({
   },
   inner: {
     position: 'absolute',
-    top: 0,
+    top: { default: 0, '@media (max-width: 860px)': 'env(safe-area-inset-top)' },
     bottom: 0,
     left: 0,
     borderLeftWidth: { default: 1, '@media (max-width: 860px)': 0 },

@@ -28,7 +28,7 @@ const s = stylex.create({
   card: {
     position: 'fixed',
     zIndex: 21,
-    top: 54,
+    top: 'calc(54px + env(safe-area-inset-top))',
     width: 'min(340px, calc(100vw - 24px))',
     display: 'flex',
     flexDirection: 'column',
