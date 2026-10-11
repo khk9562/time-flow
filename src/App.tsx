@@ -41,7 +41,23 @@ const s = stylex.create({
     paddingInline: 'clamp(12px, 2vw, 22px)',
   },
   topRight: { display: 'flex', alignItems: 'center', minWidth: 0 },
-  brand: { fontWeight: 800, fontSize: 15, letterSpacing: '0.04em', paddingLeft: 8 },
+  brand: {
+    height: 32,
+    paddingInline: 8,
+    borderRadius: 999,
+    fontWeight: 800,
+    fontSize: 15,
+    letterSpacing: '0.04em',
+    color: color.ink,
+    backgroundColor: { default: 'transparent', ':hover': color.wash, ':active': color.washStrong },
+    transitionProperty: 'background-color, transform',
+    transitionDuration: dur.tap,
+    transform: { default: 'none', ':active': 'scale(0.95)' },
+    outlineStyle: { default: 'none', ':focus-visible': 'solid' },
+    outlineWidth: 2,
+    outlineColor: color.ink,
+    outlineOffset: 1,
+  },
   // 오른쪽 패널: 넓은 화면에서는 폭이 열리며 메인을 왼쪽으로 밀고, 좁은 화면에서는 위를 덮는다.
   panel: {
     zIndex: 2,
@@ -211,7 +227,14 @@ export function App() {
 
       <main {...stylex.props(s.stage, view.page && s.away)} inert={view.page}>
         <header {...stylex.props(s.top)}>
-          <span {...stylex.props(s.brand)}>흐름</span>
+          <button
+            type="button"
+            aria-label="흐름 — 메인 화면으로"
+            onClick={() => setView((v) => ({ ...v, year: now().getFullYear(), engaged: false, month: null, day: null, page: false }))}
+            {...stylex.props(s.brand)}
+          >
+            흐름
+          </button>
           <div {...stylex.props(s.topRight)}>
             <PhaseBar />
             <Account />
