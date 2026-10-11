@@ -1,5 +1,6 @@
 import * as stylex from '@stylexjs/stylex';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Account } from './components/Account';
 import { AtmosphereCanvas } from './components/AtmosphereCanvas';
 import { Calendar } from './components/Calendar';
 import { DialZone, type YearOption } from './components/DialZone';
@@ -9,6 +10,7 @@ import { Planner } from './components/Planner';
 import { useLast, usePresence } from './components/ui';
 import { YearPage } from './components/YearPage';
 import { useDB, yearHasData } from './lib/store';
+import { isAuthHash } from './lib/supabase';
 import { daysInMonth, now, useSlowNow } from './lib/time';
 import { color, dur, ease } from './tokens.stylex';
 
@@ -38,6 +40,7 @@ const s = stylex.create({
     paddingTop: 12,
     paddingInline: 'clamp(12px, 2vw, 22px)',
   },
+  topRight: { display: 'flex', alignItems: 'center', minWidth: 0 },
   brand: { fontWeight: 800, fontSize: 15, letterSpacing: '0.04em', paddingLeft: 8 },
   // 오른쪽 패널: 넓은 화면에서는 폭이 열리며 메인을 왼쪽으로 밀고, 좁은 화면에서는 위를 덮는다.
   panel: {
@@ -133,6 +136,8 @@ export function App() {
   // 주소(#/2026/10/11) 와 화면 상태를 맞춘다: 새로고침·뒤로 가기에도 보던 곳이 유지된다.
   useEffect(() => {
     const h = toHash(view);
+    // 로그인 링크로 돌아온 직후에는 해시에 토큰이 실려 있다. Supabase 가 읽고 지울 때까지 건드리지 않는다.
+    if (isAuthHash(location.hash)) return;
     if (h !== location.hash) history.pushState(null, '', h || location.pathname + location.search);
   }, [view]);
   useEffect(() => {
@@ -207,7 +212,10 @@ export function App() {
       <main {...stylex.props(s.stage, view.page && s.away)} inert={view.page}>
         <header {...stylex.props(s.top)}>
           <span {...stylex.props(s.brand)}>흐름</span>
-          <PhaseBar />
+          <div {...stylex.props(s.topRight)}>
+            <PhaseBar />
+            <Account />
+          </div>
         </header>
         <Hero />
         <DialZone
