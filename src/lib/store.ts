@@ -325,6 +325,40 @@ export async function sendLoginLink(email: string): Promise<string | null> {
   return error ? error.message : null;
 }
 
+export async function signInWithPassword(email: string, password: string): Promise<string | null> {
+  if (!supabase) return '계정 기능이 아직 연결되지 않았습니다';
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  return error ? error.message : null;
+}
+
+/** 가입. 'confirm' 은 Supabase 가 메일 확인을 요구하는 설정일 때 (바로 로그인되지 않는다) */
+export async function signUpWithPassword(email: string, password: string): Promise<{ error: string | null; confirm: boolean }> {
+  if (!supabase) return { error: '계정 기능이 아직 연결되지 않았습니다', confirm: false };
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo: location.origin + location.pathname },
+  });
+  if (error) return { error: error.message, confirm: false };
+  // 메일 확인이 켜져 있으면, 이미 있는 주소로 가입해도 오류 없이 빈 사용자가 돌아온다
+  if (!data.session && data.user && data.user.identities?.length === 0) return { error: 'already registered', confirm: false };
+  return { error: null, confirm: !data.session };
+}
+
+/** 로그인한 상태에서 비밀번호를 정하거나 바꾼다 (메일로 로그인한 계정, 비밀번호를 잊은 경우) */
+export async function setPassword(password: string): Promise<string | null> {
+  if (!supabase) return '계정 기능이 아직 연결되지 않았습니다';
+  const { error } = await supabase.auth.updateUser({ password });
+  return error ? error.message : null;
+}
+
+/** 메일에 적힌 코드로 로그인한다 (링크를 누를 수 없는 환경: 홈 화면 앱, 다른 기기의 메일함 등) */
+export async function verifyLoginCode(email: string, code: string): Promise<string | null> {
+  if (!supabase) return '계정 기능이 아직 연결되지 않았습니다';
+  const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
+  return error ? error.message : null;
+}
+
 /** 아직 올리지 못한 기록 수 (로그아웃 전에 알려주기 위해) */
 export const pendingCount = () => meta.dirty.length;
 
