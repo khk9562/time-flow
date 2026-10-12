@@ -1,10 +1,9 @@
-import { FlowBarAurora } from './FlowBarAurora';
 import { FlowBarBeam } from './FlowBarBeam';
 import { FlowBarClassic } from './FlowBarClassic';
 import { FlowBarClean } from './FlowBarClean';
 
-// 게이지 디자인 비교용: 주소에 ?bar=clean | classic | aurora | beam 을 붙이면 그 디자인으로 본다 (기본 clean).
-const VARIANTS = { clean: FlowBarClean, beam: FlowBarBeam, aurora: FlowBarAurora, classic: FlowBarClassic };
+// 게이지 디자인 비교용: 주소에 ?bar=clean | classic | beam 을 붙이면 그 디자인으로 본다 (기본 clean).
+const VARIANTS = { clean: FlowBarClean, beam: FlowBarBeam, classic: FlowBarClassic };
 const pick = new URLSearchParams(location.search).get('bar');
 const Variant = VARIANTS[pick as keyof typeof VARIANTS] ?? FlowBarClean;
 
