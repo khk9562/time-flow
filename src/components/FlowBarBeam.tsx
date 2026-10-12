@@ -24,15 +24,22 @@ const s = stylex.create({
 
 const WHITE: RGB = [255, 255, 255];
 
-// 느린 사인파 묶음: [진폭, 주파수, 속도(rad/s), 위상]. 속도가 작을수록 천천히 흐른다.
+// 느린 사인파 묶음: [진폭, 주파수, 속도(rad/s), 위상]. 속도가 작을수록 천천히 흔들린다.
 type Wave = [number, number, number, number][];
 const wave = (w: Wave, X: number, t: number) => w.reduce((v, [a, f, sp, ph]) => v + a * Math.sin(f * X + sp * t + ph), 0);
-// 겹마다 다른 물결: 바깥 겹은 크고 옅게, 안쪽 겹은 작고 진하게.
-const LAYERS: { wave: Wave; scale: number; alpha: number }[] = [
-  { wave: [[0.55, 1.2, 0.34, 0], [0.3, 2.6, 0.22, 1.3], [0.15, 4.4, 0.47, 2.6]], scale: 1, alpha: 0.16 },
-  { wave: [[0.5, 1.7, 0.27, 2.2], [0.35, 3.1, 0.41, 0.5], [0.15, 5.6, 0.31, 1.8]], scale: 0.72, alpha: 0.2 },
-  { wave: [[0.6, 2.3, 0.39, 3.4], [0.25, 4.1, 0.29, 0.9], [0.15, 6.8, 0.53, 4.2]], scale: 0.42, alpha: 0.3 },
+const RIBBONS: { a: Wave; b: Wave; alpha: number }[] = [
+  {
+    a: [[0.55, 1.1, 0.31, 0], [0.3, 2.7, -0.23, 1.2], [0.15, 4.9, 0.41, 2.5]],
+    b: [[0.5, 1.6, -0.27, 2.1], [0.35, 3.3, 0.19, 0.4], [0.15, 6.1, -0.37, 1.7]],
+    alpha: 0.13,
+  },
+  {
+    a: [[0.45, 0.8, -0.21, 3.3], [0.35, 2.2, 0.29, 0.9], [0.2, 5.3, -0.17, 4.1]],
+    b: [[0.6, 1.9, 0.17, 1.4], [0.25, 3.9, -0.33, 2.8], [0.15, 7.2, 0.25, 0.3]],
+    alpha: 0.09,
+  },
 ];
+const STRANDS = 26;
 
 type Props = {
   /** 0..1 을 돌려주는 함수. 매 프레임 호출된다. */
@@ -42,8 +49,8 @@ type Props = {
 };
 
 /**
- * 빛줄기 게이지. 가운데 실선을 중심으로 반투명한 빛의 면이 굵어졌다 가늘어지며 천천히 머리 쪽으로
- * 흘러가고, 지금을 가리키는 머리의 한 점으로 모인다. 머리에는 가만히 선 빛의 심이 있다. (?bar=beam)
+ * 빛줄기 게이지. 가는 실 여러 가닥이 리본처럼 겹쳐 천천히 제각각 일렁인다. 양 끝은 1월 앞과
+ * 지금 위치의 세로 실선 위에 고르게 펼쳐진 채 고정돼, 두 실선 사이를 잇는다. (?bar=beam)
  */
 export function FlowBarBeam({ progress, months }: Props) {
   const head = useRef({ pulse: 0, lastSec: -1 }).current;
@@ -73,11 +80,13 @@ export function FlowBarBeam({ progress, months }: Props) {
     if (p > 0) {
       const fx = x0 + Math.max(maxT, bw * p);
       const span = fx - x0;
-      // 빛의 면: 가운데 실선을 중심으로 위아래가 똑같이 부푼 반투명한 면 몇 겹.
-      // 두께가 굵어졌다 가늘어지는 마디가 천천히 머리 쪽으로 흘러가고, 폭은 머리에서 0 이 되어 한 점으로 모인다.
+      // 실 다발: 두 물결 곡선 사이를 가는 실 여러 가닥으로 이어 리본을 만든다.
+      // 곡선마다 느린 사인파를 겹쳐 천천히 제각각 흔들린다. 양 끝에서는 흔들림이 잦아들어,
+      // 실들이 세로 실선 위에 고르게 펼쳐진 채 고정된다 (1월 앞과 지금 위치, 두 실선에서 시작해 이어진다).
       const amp = barH / 2 + GY * 0.6;
-      const env = (u: number) => Math.pow(Math.sin(Math.PI * Math.pow(u, 0.8)), 0.9);
-      const STEP = 3;
+      const endH = maxT * 0.9;
+      const env = (u: number) => Math.pow(Math.sin(Math.PI * u), 0.8);
+      const STEP = 4;
       const n = Math.max(2, Math.ceil(span / STEP) + 1);
       const xs = new Float32Array(n);
       const es = new Float32Array(n);
@@ -88,33 +97,42 @@ export function FlowBarBeam({ progress, months }: Props) {
       }
       ctx.save();
       ctx.globalCompositeOperation = dark ? 'lighter' : 'source-over';
-      const hs = new Float32Array(n);
-      for (const ly of LAYERS) {
+      ctx.lineWidth = 0.7;
+      for (const rb of RIBBONS) {
+        const a = new Float32Array(n);
+        const b = new Float32Array(n);
         for (let k = 0; k < n; k++) {
           const X = ((xs[k] - x0) / span) * 6;
-          // 0..1 로 접어 두께로 쓴다 (마디가 오른쪽으로 흐르도록 위상에서 시간을 뺀다)
-          const w = 0.5 + 0.5 * wave(ly.wave, X, -t);
-          hs[k] = es[k] * ly.scale * (0.18 + 0.82 * w);
+          a[k] = wave(rb.a, X, t);
+          b[k] = wave(rb.b, X, t);
         }
-        ctx.beginPath();
-        ctx.moveTo(xs[0], cy);
-        for (let k = 0; k < n; k++) ctx.lineTo(xs[k], cy - hs[k]);
-        for (let k = n - 1; k >= 0; k--) ctx.lineTo(xs[k], cy + hs[k]);
-        ctx.closePath();
-        const g = ctx.createLinearGradient(x0, 0, fx, 0);
-        g.addColorStop(0, rgba(core, 0));
-        g.addColorStop(0.25, rgba(core, ly.alpha * 0.6));
-        g.addColorStop(1, rgba(core, ly.alpha));
-        ctx.fillStyle = g;
-        ctx.fill();
+        for (let i = 0; i < STRANDS; i++) {
+          const s = i / (STRANDS - 1);
+          ctx.strokeStyle = rgba(core, rb.alpha * (dark ? 1 : 1.4) * (0.35 + 0.65 * Math.sin(Math.PI * s)));
+          ctx.beginPath();
+          for (let k = 0; k < n; k++) {
+            const m = es[k] / amp;
+            const y = cy + (1 - m) * (s * 2 - 1) * endH + es[k] * (a[k] + (b[k] - a[k]) * s);
+            if (k === 0) ctx.moveTo(xs[k], y);
+            else ctx.lineTo(xs[k], y);
+          }
+          ctx.stroke();
+        }
       }
-      // 모이는 쪽으로 갈수록 환해지는 가는 심
+      // 머리 쪽으로 갈수록 환해지는 가는 심
       const spine = ctx.createLinearGradient(x0, 0, fx, 0);
-      spine.addColorStop(0, rgba(core, 0));
+      spine.addColorStop(0, rgba(core, dark ? 0.12 : 0.15));
       spine.addColorStop(0.7, rgba(core, dark ? 0.25 : 0.3));
       spine.addColorStop(1, rgba(core, dark ? 0.9 : 0.8));
       ctx.fillStyle = spine;
       ctx.fillRect(x0, cy - 0.75, span, 1.5);
+      // 시작 실선: 머리의 실선과 짝을 이루는, 실들이 붙어 있는 세로선
+      const start = ctx.createLinearGradient(0, cy - maxT * 1.3, 0, cy + maxT * 1.3);
+      start.addColorStop(0, rgba(core, 0));
+      start.addColorStop(0.5, rgba(core, dark ? 0.7 : 0.75));
+      start.addColorStop(1, rgba(core, 0));
+      ctx.fillStyle = start;
+      ctx.fillRect(x0 - 0.75, cy - maxT * 1.3, 1.5, maxT * 2.6);
       ctx.restore();
 
       // 지금 이 순간: 머리의 빛은 가만히 서 있고, 초마다 한 번 둘레가 환하게 번진다
