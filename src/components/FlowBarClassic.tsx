@@ -24,7 +24,7 @@ type Props = {
   months?: { year: number };
 };
 
-/** (백업) 2026-10 까지 쓰던 무채색 게이지. ?bar=classic 으로 볼 수 있다.
+/** (백업) 2026-10 까지 쓰던 무채색 게이지. 되돌리려면 쓰는 곳의 import 를 FlowBarClassic 으로 바꾼다.
  *  채워진 부분 안에서 농담이 오른쪽으로 흐르고, 물결 줄·입자·초마다 번지는 머리 선이 있다. */
 export function FlowBarClassic({ progress, months }: Props) {
   const head = useRef({ pulse: 0, lastSec: -1 }).current;

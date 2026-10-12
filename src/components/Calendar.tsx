@@ -33,7 +33,7 @@ const s = stylex.create({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: { default: 56, '@media (max-width: 560px)': 64 },
+    height: 64,
     paddingTop: 12,
     marginInline: -10,
     flexShrink: 0,
