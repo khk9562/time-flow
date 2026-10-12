@@ -29,7 +29,15 @@ const s = stylex.create({
     transitionTimingFunction: ease.out,
   },
   leaving: { opacity: 0, transform: 'scale(0.97)', pointerEvents: 'none' },
-  top: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 56, paddingTop: 12, marginInline: -10, flexShrink: 0 },
+  top: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: { default: 56, '@media (max-width: 560px)': 64 },
+    paddingTop: 12,
+    marginInline: -10,
+    flexShrink: 0,
+  },
   nav: { display: 'flex', alignItems: 'center' },
   body: {
     flexGrow: 1,
@@ -129,14 +137,14 @@ export function Calendar({ year, month, leaving, onPick, onClose, onStep }: Prop
   return (
     <div {...stylex.props(s.root, leaving && s.leaving)}>
       <div {...stylex.props(s.top)}>
-        <button type="button" aria-label="달력 닫기" onClick={onClose} {...stylex.props(ui.iconButton)}>
+        <button type="button" aria-label="달력 닫기" onClick={onClose} {...stylex.props(ui.iconButton, ui.navButton)}>
           ←
         </button>
         <div {...stylex.props(s.nav)}>
-          <button type="button" aria-label="이전 달" onClick={() => onStep(-1)} {...stylex.props(ui.iconButton)}>
+          <button type="button" aria-label="이전 달" onClick={() => onStep(-1)} {...stylex.props(ui.iconButton, ui.navButton)}>
             ‹
           </button>
-          <button type="button" aria-label="다음 달" onClick={() => onStep(1)} {...stylex.props(ui.iconButton)}>
+          <button type="button" aria-label="다음 달" onClick={() => onStep(1)} {...stylex.props(ui.iconButton, ui.navButton)}>
             ›
           </button>
         </div>

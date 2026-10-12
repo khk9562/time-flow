@@ -4,7 +4,7 @@ import { emptyYear, getYearPlan, newGoal, updateYearPlan, useDB, type Goal } fro
 import { now } from '../lib/time';
 import { color, dur, ease, type } from '../tokens.stylex';
 import { FlowBar } from './FlowBar';
-import { AutoTextarea, Check, ui } from './ui';
+import { AutoTextarea, Check, ui, useMedia } from './ui';
 import { YearMap } from './YearMap';
 
 const MAX_GOALS = 5;
@@ -45,7 +45,7 @@ const s = stylex.create({
     animationTimingFunction: ease.out,
     animationFillMode: 'both',
   },
-  top: { display: 'flex', alignItems: 'center', height: 56, paddingTop: 12, paddingInline: 10 },
+  top: { display: 'flex', alignItems: 'center', height: { default: 56, '@media (max-width: 560px)': 64 }, paddingTop: 12, paddingInline: 10 },
   grid: {
     display: 'grid',
     gridTemplateColumns: { default: 'minmax(0, 5fr) minmax(0, 6fr)', '@media (max-width: 860px)': 'minmax(0, 1fr)' },
@@ -153,6 +153,8 @@ export function YearPage({ year, origin, leaving, onClose, onOpenDay }: Props) {
   const draft = useMemo(emptyYear, [year]);
   const plan = getYearPlan(db, year) ?? draft;
   const [confirm, setConfirm] = useState<string | null>(null);
+  // 휴대폰에서는 365개의 점이 너무 작아 누를 수 없다. 날짜는 메인 화면에서 달을 골라 들어간다
+  const phone = useMedia('(max-width: 560px)');
 
   const patchGoal = (id: string, patch: Partial<Goal>) =>
     updateYearPlan(year, { ...plan, goals: plan.goals.map((g) => (g.id === id ? { ...g, ...patch } : g)) });
@@ -178,7 +180,7 @@ export function YearPage({ year, origin, leaving, onClose, onOpenDay }: Props) {
     <div role="dialog" aria-modal="true" aria-label={`${year}년 계획`} {...stylex.props(s.root, leaving && s.leaving)}>
       {origin && !leaving && <span aria-hidden {...stylex.props(s.wave)} style={{ left: origin.x, top: origin.y }} />}
       <div {...stylex.props(s.top)}>
-        <button type="button" onClick={onClose} aria-label="메인 화면으로 돌아가기" {...stylex.props(ui.iconButton)}>
+        <button type="button" onClick={onClose} aria-label="메인 화면으로 돌아가기" {...stylex.props(ui.iconButton, ui.navButton)}>
           ←
         </button>
       </div>
@@ -200,10 +202,12 @@ export function YearPage({ year, origin, leaving, onClose, onOpenDay }: Props) {
               xstyle={s.motto}
             />
           </label>
-          <div {...stylex.props(s.section, s.enter)} style={delay(340)}>
-            <span {...stylex.props(ui.label)}>365일</span>
-            <YearMap year={year} onOpenDay={onOpenDay} />
-          </div>
+          {!phone && (
+            <div {...stylex.props(s.section, s.enter)} style={delay(340)}>
+              <span {...stylex.props(ui.label)}>365일</span>
+              <YearMap year={year} onOpenDay={onOpenDay} />
+            </div>
+          )}
         </div>
 
         <div {...stylex.props(s.col)}>
