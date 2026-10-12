@@ -9,7 +9,9 @@ const s = stylex.create({
   item: {
     position: 'relative',
     height: 32,
-    paddingInline: 8,
+    // 글자가 세로로 꺾이지 않게 하고, 아주 좁은 화면에서는 버튼 사이를 좁힌다
+    whiteSpace: 'nowrap',
+    paddingInline: { default: 8, '@media (max-width: 360px)': 4 },
     borderRadius: radius.pill,
     fontSize: type.small,
     fontWeight: 500,
