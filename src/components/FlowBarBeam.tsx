@@ -33,7 +33,7 @@ type Props = {
 
 /**
  * 빛줄기 게이지. 가는 선 위로 빛이 왼쪽에서 가늘게 시작해 지금 쪽으로 갈수록 굵고 밝아지고,
- * 빛의 결이 머리를 향해 흘러든다. 머리에는 가만히 선 빛의 심이 있다. (?bar=beam, 기본)
+ * 빛의 결이 머리를 향해 흘러든다. 머리에는 가만히 선 빛의 심이 있다. (?bar=beam 으로 볼 수 있다)
  */
 export function FlowBarBeam({ progress, months }: Props) {
   const head = useRef({ pulse: 0, lastSec: -1 }).current;
