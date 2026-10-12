@@ -42,7 +42,7 @@ type Props = {
 
 /**
  * 시간이 흐르고 있음을 보여주는 게이지. 무채색 빛이 오로라처럼 일렁이며 흩날리고,
- * 채워진 부분은 물처럼 출렁이며 차오른다. (예전 디자인: FlowBarClassic)
+ * 채워진 면은 지금을 가리키는 실선 쪽으로 물처럼 흘러든다. (예전 디자인: FlowBarClassic)
  */
 export function FlowBar({ progress, months }: Props) {
   const head = useRef({ pulse: 0, lastSec: -1 }).current;
@@ -74,29 +74,11 @@ export function FlowBar({ progress, months }: Props) {
     if (p > 0) {
       const fx = x0 + Math.max(barH, bw * p);
       const span = fx - x0;
-      // 윗면: 물결이 오른쪽으로 밀려가며 출렁인다
-      const swell = barH * 0.11;
-      const top = (x: number) =>
-        y0 + swell * (1 + 0.6 * Math.sin(x * 0.03 - t * 1.7) + 0.4 * Math.sin(x * 0.075 + t * 2.4 + 1));
-      // 앞머리: 위아래로 일렁이고, 천천히 밀려왔다 물러나며 차오른다
-      const amp = Math.max(2.5, Math.min(9, barH * 0.32));
-      const surge = amp * 0.45 * Math.sin(t * 1.1) + amp * 0.2 * Math.sin(t * 2.7 + 0.8);
-      const edge = (v: number) =>
-        fx - amp * 0.6 + surge + amp * (0.75 * Math.sin(v * 4.6 + t * 2.3) + 0.25 * Math.sin(v * 9.5 - t * 3.1 + 1.1));
-      const STEPS = 28;
-      const front: [number, number][] = [];
-      const fy0 = top(edge(0));
-      for (let i = 0; i <= STEPS; i++) {
-        const v = i / STEPS;
-        front.push([edge(v), fy0 + v * (y0 + barH - fy0)]);
-      }
+      // 앞쪽 물살이 흐르는 구간: 실선에서 이만큼 뒤부터
+      const reach = Math.min(span, Math.max(barH * 5, 140));
       const fillPath = () => {
         ctx.beginPath();
-        ctx.moveTo(x0, top(x0));
-        for (let x = x0 + 6; x < front[0][0]; x += 6) ctx.lineTo(x, top(x));
-        for (const [x, y] of front) ctx.lineTo(x, y);
-        ctx.lineTo(x0, y0 + barH);
-        ctx.closePath();
+        ctx.rect(x0, y0, span, barH);
       };
 
       // 바깥으로 번지는 빛: 옅은 빛 덩어리들이 숨 쉬듯 떠돈다
@@ -120,7 +102,7 @@ export function FlowBar({ progress, months }: Props) {
         ctx.restore();
       }
 
-      // 오로라 커튼: 수면 위로 세로 빛줄기가 늘어져 일렁인다
+      // 오로라 커튼: 막대 위로 세로 빛줄기가 늘어져 일렁인다
       const ch = GY + barH * 0.4;
       const cv = curtain.current ?? (curtain.current = document.createElement('canvas'));
       if (cv.width !== Math.ceil(W) || cv.height !== Math.ceil(ch)) {
@@ -152,13 +134,13 @@ export function FlowBar({ progress, months }: Props) {
         ctx.drawImage(cv, 0, y0 + barH * 0.4 - ch, W, ch);
       }
 
-      // 흩날림: 수면에서 빛 안개가 피어올라 비스듬히 흩어진다
+      // 흩날림: 윗면에서 빛 안개가 피어올라 비스듬히 흩어진다
       for (const w of WISPS) {
         const k = (t / w.life + w.phase) % 1;
         const fade = Math.sin(k * Math.PI);
         const wx = x0 + span * ((w.x + t * w.drift) % 1) + k * barH * 1.5;
         if (wx > fx) continue;
-        const wy = top(wx) - k * (GY + barH * 0.3);
+        const wy = y0 - k * (GY + barH * 0.3);
         const ry = Math.max(3, barH * 0.35) * (0.7 + k * 0.8);
         const rx = ry * (2.4 + 2 * w.w);
         const edgeFade = Math.min(1, (wx - x0) / 20, (fx - wx) / 30);
@@ -205,19 +187,52 @@ export function FlowBar({ progress, months }: Props) {
         rays.addColorStop(u, w > 0 ? rgba(ink, w * 0.5) : rgba(paper, -w * (dark ? 0.16 : 0.24)));
       }
       ctx.fillStyle = rays;
-      ctx.fillRect(x0, y0, span + amp * 2, barH);
+      ctx.fillRect(x0, y0, span, barH);
 
-      // 수면의 윤기와 바닥의 깊이
+      // 윗면의 윤기와 바닥의 깊이
       const gloss = ctx.createLinearGradient(0, y0, 0, y0 + barH);
       gloss.addColorStop(0, rgba(paper, 0));
       gloss.addColorStop(0.18, rgba(dark ? [255, 255, 255] : paper, dark ? 0.22 : 0.18));
       gloss.addColorStop(0.5, rgba(paper, 0));
       gloss.addColorStop(1, rgba(paper, dark ? 0.1 : 0.18));
       ctx.fillStyle = gloss;
-      ctx.fillRect(x0, y0, span + amp * 2, barH);
+      ctx.fillRect(x0, y0, span, barH);
+
+      // 물살: 앞쪽 면의 결이 실선에 가까울수록 빨라지며 흘러들고, 실선 앞에 빛이 고인다
+      const pool = ctx.createLinearGradient(fx - reach, 0, fx, 0);
+      pool.addColorStop(0, rgba(ink, 0));
+      pool.addColorStop(1, rgba(ink, dark ? 0.35 : 0.3));
+      ctx.fillStyle = pool;
+      ctx.fillRect(fx - reach, y0, reach, barH);
+      const glint = dark ? ink : paper;
+      const trough = dark ? paper : ink;
+      const STREAMS = 6;
+      for (let i = 0; i < STREAMS; i++) {
+        const k = (t * 0.32 + i / STREAMS) % 1; // 0 → 1: 멀리서 실선까지
+        const e = k * k; // 실선에 가까울수록 빨라진다
+        const cx = fx - reach * (1 - e);
+        const w = reach * (0.22 - 0.15 * e); // 다가갈수록 좁아지고
+        const a = Math.sin(k * Math.PI * 0.5) ** 2 * Math.min(1, (1 - k) * 12) * (dark ? 0.7 : 0.45); // 밝아지다가 닿으면 스민다
+        const g = ctx.createLinearGradient(cx - w, 0, cx + w * 0.35, 0);
+        // 물마루 뒤에 옅은 골이 따라와 결이 보인다
+        g.addColorStop(0, rgba(trough, 0));
+        g.addColorStop(0.4, rgba(trough, a * 0.45));
+        g.addColorStop(0.78, rgba(glint, a));
+        g.addColorStop(1, rgba(glint, 0));
+        ctx.fillStyle = g;
+        // 가운데가 조금 앞서 나가는 물머리. 앞뒤 가장자리가 잔물결로 흔들린다
+        const curve = (v: number, back: number) =>
+          cx + back + Math.sin(v * Math.PI) * w * 0.12 + Math.sin(v * 5 + t * 2.6 + i * 1.7) * barH * 0.05;
+        const SEG = 12;
+        ctx.beginPath();
+        for (let j = 0; j <= SEG; j++) ctx.lineTo(curve(j / SEG, w * 0.35), y0 + (j / SEG) * barH);
+        for (let j = SEG; j >= 0; j--) ctx.lineTo(curve(j / SEG, -w), y0 + (j / SEG) * barH);
+        ctx.closePath();
+        ctx.fill();
+      }
       ctx.restore();
 
-      // 지금 이 순간: 초마다 한 번, 차오르는 앞머리가 환하게 번진다
+      // 지금 이 순간: 실선은 가만히 서 있고, 초마다 한 번 그 둘레가 환하게 번진다
       const sec = now().getSeconds();
       if (sec !== head.lastSec) {
         head.lastSec = sec;
@@ -225,7 +240,7 @@ export function FlowBar({ progress, months }: Props) {
       }
       head.pulse = Math.max(0, head.pulse - dt * 1.25);
       const pulse = head.pulse;
-      const hx = edge(0.5);
+      const hx = Math.min(W - GX - 1, fx);
       const hy = y0 + barH / 2;
       const halo = ctx.createRadialGradient(hx, hy, 0, hx, hy, barH * 0.6 + GY * (0.7 + (1 - pulse) * 0.5));
       halo.addColorStop(0, rgba(ink, (dark ? 0.2 : 0.1) + (dark ? 0.3 : 0.15) * pulse));
@@ -233,19 +248,8 @@ export function FlowBar({ progress, months }: Props) {
       ctx.fillStyle = halo;
       ctx.fillRect(hx - GY * 2 - barH, 0, GY * 4 + barH * 2, H);
 
-      ctx.save();
-      roundRectPath(ctx, x0 - 2, y0 - 2, bw + 4, barH + 4, r + 2);
-      ctx.clip();
-      ctx.beginPath();
-      front.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.shadowColor = rgba(ink, 0.9);
-      ctx.shadowBlur = 8 + 10 * pulse;
-      ctx.strokeStyle = rgba(ink, 0.85 + 0.15 * pulse);
-      ctx.lineWidth = Math.max(1.5, Math.min(3, barH * 0.08)) + pulse;
-      ctx.stroke();
-      ctx.restore();
+      ctx.fillStyle = rgba(ink, 1);
+      ctx.fillRect(hx - 1, y0 - 3, 2, barH + 6);
     }
 
     if (months) {
