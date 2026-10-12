@@ -23,12 +23,8 @@ export const ui = stylex.create({
     outlineColor: color.ink,
     outlineOffset: -2,
   },
-  // 화면 맨 위 이동 버튼(뒤로·이전·다음). 휴대폰에서는 손가락에 맞게 크게
-  navButton: {
-    width: { default: 44, '@media (max-width: 560px)': 52 },
-    height: { default: 44, '@media (max-width: 560px)': 52 },
-    fontSize: { default: 20, '@media (max-width: 560px)': 30 },
-  },
+  // 화면 맨 위 이동 버튼(뒤로·이전·다음). 눈에 잘 띄고 누르기 쉽게 크게
+  navButton: { width: 52, height: 52, fontSize: 30 },
   textButton: {
     flexShrink: 0,
     height: 44,

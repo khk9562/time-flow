@@ -50,6 +50,8 @@ const s = stylex.create({
   },
   topRight: { display: 'flex', alignItems: 'center', minWidth: 0 },
   brand: {
+    flexShrink: 0,
+    whiteSpace: 'nowrap',
     height: 32,
     paddingInline: 8,
     borderRadius: 999,

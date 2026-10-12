@@ -1,11 +1,13 @@
 import * as stylex from '@stylexjs/stylex';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { atmosphere, atmosphereSnapshot, phaseOf, subscribeAtmosphere } from '../lib/atmosphere';
 import {
   accountsAvailable, pendingCount, sendLoginLink, setPassword, signInWithPassword, signOut, signUpWithPassword,
   useDB, useSync, verifyLoginCode,
 } from '../lib/store';
 import { authReturnError, supabase } from '../lib/supabase';
 import { color, dur, ease, radius, type } from '../tokens.stylex';
+import { PhaseIcon } from './PhaseIcon';
 import { ui } from './ui';
 
 const cardIn = stylex.keyframes({
@@ -20,10 +22,10 @@ const breathe = stylex.keyframes({
 
 const s = stylex.create({
   trigger: { height: 32, paddingInline: 10, fontSize: type.small, gap: 7, marginLeft: 4 },
-  dot: { width: 7, height: 7, borderRadius: '50%', backgroundColor: color.ink, flexShrink: 0 },
-  dotBusy: { animationName: breathe, animationDuration: '1.2s', animationIterationCount: 'infinite' },
-  dotOff: { backgroundColor: 'transparent', borderWidth: 1.5, borderStyle: 'solid', borderColor: color.ink },
-  email: { maxWidth: 96, overflow: 'hidden', textOverflow: 'ellipsis' },
+  // 로그인하면 아이디 대신 지금 시간대의 그림이 프로필처럼 선다. 동기화 중에는 숨 쉬고, 끊기면 흐려진다.
+  avatar: { width: 40, paddingInline: 0, justifyContent: 'center' },
+  busy: { animationName: breathe, animationDuration: '1.2s', animationIterationCount: 'infinite' },
+  off: { opacity: 0.4 },
   scrim: { position: 'fixed', inset: 0, zIndex: 20 },
   card: {
     position: 'fixed',
@@ -115,6 +117,8 @@ type Mode = 'signin' | 'signup' | 'mail' | 'code' | 'confirm';
 /** 계정: 로그인 없이 쓰다가 가입·로그인하면 그동안의 기록이 그대로 계정으로 옮겨진다. */
 export function Account() {
   const sync = useSync();
+  useSyncExternalStore(subscribeAtmosphere, atmosphereSnapshot);
+  const phase = phaseOf(atmosphere.preview ?? atmosphere.hour);
   const db = useDB();
   const [open, setOpen] = useState(!!authReturnError);
   const [mode, setMode] = useState<Mode>(authReturnError ? 'mail' : 'signin');
@@ -390,14 +394,15 @@ export function Account() {
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
+        aria-label={sync.user ? `계정 ${sync.user.email}` : undefined}
+        title={sync.user?.email}
         onClick={() => setOpen((v) => !v)}
-        {...stylex.props(ui.textButton, s.trigger)}
+        {...stylex.props(ui.textButton, s.trigger, sync.user && s.avatar)}
       >
         {sync.user ? (
-          <>
-            <span aria-hidden {...stylex.props(s.dot, sync.status === 'syncing' && s.dotBusy, sync.status === 'offline' && s.dotOff)} />
-            <span {...stylex.props(s.email)}>{sync.user.email.split('@')[0]}</span>
-          </>
+          <span {...stylex.props(sync.status === 'syncing' && s.busy, sync.status === 'offline' && s.off)}>
+            <PhaseIcon id={phase.id} />
+          </span>
         ) : (
           '로그인'
         )}

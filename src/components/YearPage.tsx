@@ -45,7 +45,7 @@ const s = stylex.create({
     animationTimingFunction: ease.out,
     animationFillMode: 'both',
   },
-  top: { display: 'flex', alignItems: 'center', height: { default: 56, '@media (max-width: 560px)': 64 }, paddingTop: 12, paddingInline: 10 },
+  top: { display: 'flex', alignItems: 'center', height: 64, paddingTop: 12, paddingInline: 10 },
   grid: {
     display: 'grid',
     gridTemplateColumns: { default: 'minmax(0, 5fr) minmax(0, 6fr)', '@media (max-width: 860px)': 'minmax(0, 1fr)' },
