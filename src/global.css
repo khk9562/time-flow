@@ -1,14 +1,3 @@
-/* Paperlogy — 눈누(noonnu) 배포 CDN. 오프라인 사용 시 public/fonts 로 옮겨 경로만 바꾸면 된다. */
-@font-face { font-family: 'Paperlogy'; font-weight: 100; font-display: swap; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2408-3@1.0/Paperlogy-1Thin.woff2') format('woff2'); }
-@font-face { font-family: 'Paperlogy'; font-weight: 200; font-display: swap; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2408-3@1.0/Paperlogy-2ExtraLight.woff2') format('woff2'); }
-@font-face { font-family: 'Paperlogy'; font-weight: 300; font-display: swap; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2408-3@1.0/Paperlogy-3Light.woff2') format('woff2'); }
-@font-face { font-family: 'Paperlogy'; font-weight: 400; font-display: swap; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2408-3@1.0/Paperlogy-4Regular.woff2') format('woff2'); }
-@font-face { font-family: 'Paperlogy'; font-weight: 500; font-display: swap; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2408-3@1.0/Paperlogy-5Medium.woff2') format('woff2'); }
-@font-face { font-family: 'Paperlogy'; font-weight: 600; font-display: swap; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2408-3@1.0/Paperlogy-6SemiBold.woff2') format('woff2'); }
-@font-face { font-family: 'Paperlogy'; font-weight: 700; font-display: swap; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2408-3@1.0/Paperlogy-7Bold.woff2') format('woff2'); }
-@font-face { font-family: 'Paperlogy'; font-weight: 800; font-display: swap; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2408-3@1.0/Paperlogy-8ExtraBold.woff2') format('woff2'); }
-@font-face { font-family: 'Paperlogy'; font-weight: 900; font-display: swap; src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2408-3@1.0/Paperlogy-9Black.woff2') format('woff2'); }
-
 /* 시간대 분위기 변수. lib/atmosphere.ts 가 매 순간 갱신한다 (기본값 = 밤). */
 :root {
   --paper-rgb: 12 12 13;
