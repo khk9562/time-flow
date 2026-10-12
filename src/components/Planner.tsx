@@ -417,13 +417,13 @@ export function Planner({ year, month, day, leaving, onBack, onStep }: Props) {
             <span>달력</span>
           </button>
           <div {...stylex.props(s.dateNav)}>
-            <button type="button" aria-label="전날" onClick={() => onStep(-1)} {...stylex.props(ui.iconButton)}>
+            <button type="button" aria-label="전날" onClick={() => onStep(-1)} {...stylex.props(ui.iconButton, ui.navButton)}>
               ‹
             </button>
             <span {...stylex.props(s.dateText)}>
               {month}월 {day}일 {WEEKDAYS[date.getDay()]}
             </span>
-            <button type="button" aria-label="다음 날" onClick={() => onStep(1)} {...stylex.props(ui.iconButton)}>
+            <button type="button" aria-label="다음 날" onClick={() => onStep(1)} {...stylex.props(ui.iconButton, ui.navButton)}>
               ›
             </button>
           </div>

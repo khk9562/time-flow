@@ -1,5 +1,5 @@
 import * as stylex from '@stylexjs/stylex';
-import { useEffect, useLayoutEffect, useRef, useState, type TextareaHTMLAttributes } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type TextareaHTMLAttributes } from 'react';
 import { color, dur, ease, radius, type } from '../tokens.stylex';
 
 export const ui = stylex.create({
@@ -22,6 +22,12 @@ export const ui = stylex.create({
     outlineWidth: 2,
     outlineColor: color.ink,
     outlineOffset: -2,
+  },
+  // 화면 맨 위 이동 버튼(뒤로·이전·다음). 휴대폰에서는 손가락에 맞게 크게
+  navButton: {
+    width: { default: 44, '@media (max-width: 560px)': 52 },
+    height: { default: 44, '@media (max-width: 560px)': 52 },
+    fontSize: { default: 20, '@media (max-width: 560px)': 30 },
   },
   textButton: {
     flexShrink: 0,
@@ -61,6 +67,18 @@ export const ui = stylex.create({
     whiteSpace: 'nowrap',
   },
 });
+
+/** 미디어 쿼리가 지금 맞는지. 화면 크기가 바뀌면 다시 그린다 */
+export function useMedia(query: string) {
+  return useSyncExternalStore(
+    (cb) => {
+      const mq = window.matchMedia(query);
+      mq.addEventListener('change', cb);
+      return () => mq.removeEventListener('change', cb);
+    },
+    () => window.matchMedia(query).matches,
+  );
+}
 
 /** 나타남/사라짐 전환을 위해 사라지는 동안에도 잠시 남겨둔다 */
 export function usePresence(show: boolean, exitMs: number) {
