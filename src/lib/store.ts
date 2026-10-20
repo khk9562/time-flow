@@ -411,6 +411,27 @@ export async function signOut() {
   await supabase.auth.signOut();
 }
 
+/** 서버에 탈퇴 함수(supabase/schema.sql 의 delete_account)가 아직 없을 때 돌려주는 오류 */
+export const NO_DELETE_FUNCTION = 'delete function missing';
+
+/**
+ * 회원 탈퇴. 서버의 계정을 지우면 기록(entries)은 on delete cascade 로 함께 지워진다.
+ * 이 기기에 남은 계정 사본도 지우고 빈 게스트 상태로 돌아간다. 되돌릴 수 없다.
+ */
+export async function deleteAccount(): Promise<string | null> {
+  if (!supabase || !sync.user) return '계정 기능이 아직 연결되지 않았습니다';
+  // 지우는 도중에 남은 기록을 올리지 않게 멈춘다
+  clearTimeout(pushTimer);
+  const { error } = await supabase.rpc('delete_account');
+  if (error) return error.code === 'PGRST202' ? NO_DELETE_FUNCTION : error.message;
+  discardCache = true;
+  meta.dirty = [];
+  markPasswordPending(null);
+  // 서버의 세션은 계정과 함께 사라졌으니 이 기기에서만 로그아웃한다
+  await supabase.auth.signOut({ scope: 'local' });
+  return null;
+}
+
 export function getDay(d: DB, key: string): DayEntry {
   return d.days[key] ?? EMPTY_DAY;
 }

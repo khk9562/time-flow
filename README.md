@@ -23,10 +23,11 @@ npm run dev
 - **가입**: 이메일 입력 → 메일로 받은 인증 코드 확인 → 비밀번호 정하기
 - **로그인**: 이메일 + 비밀번호
 - **비밀번호를 잊으면**: 이메일 입력 → 메일로 받은 인증 코드 확인 → 비밀번호 새로 정하기
+- **회원 탈퇴**: 계정 메뉴 → 회원 탈퇴 → "탈퇴" 입력. 계정과 모든 기록이 서버와 이 기기에서 지워진다.
 - **비밀번호 규칙**: 8자 이상, 영문과 숫자를 모두 포함, 이메일 아이디(@ 앞)가 들어가지 않게
 
 1. [Supabase](https://supabase.com) 에서 프로젝트를 만든다.
-2. SQL Editor 에 [`supabase/schema.sql`](supabase/schema.sql) 을 붙여 넣고 실행한다.
+2. SQL Editor 에 [`supabase/schema.sql`](supabase/schema.sql) 을 붙여 넣고 실행한다. 기록 테이블과 회원 탈퇴 함수(`delete_account`)가 만들어진다. 여러 번 실행해도 된다.
 3. Authentication → URL Configuration 의 Site URL / Redirect URLs 에 앱 주소(개발 중에는 `http://localhost:5190`)를 넣는다.
 4. Authentication → Emails → Templates 의 **Magic Link** 와 **Confirm signup** 본문에 `{{ .Token }}` 을 넣는다. 인증 코드는 이 자리에 찍혀 나간다. 링크(`{{ .ConfirmationURL }}`)는 빼고 코드만 보내는 것을 권한다 — 링크로 들어와도 같은 브라우저라면 비밀번호 단계로 이어지지만, 다른 기기에서 열면 비밀번호 없이 로그인만 된다.
 5. Authentication → Sign In / Providers → Email 에서 **Minimum password length** 를 `8`, **Password requirements** 를 "Letters and digits" 로 둔다. 화면의 비밀번호 규칙(`src/lib/password.ts`)과 같은 기준을 서버에도 건다. **Confirm email** 은 켜도 꺼도 된다 — 가입은 언제나 메일 코드 확인을 거친다.

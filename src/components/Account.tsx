@@ -1,8 +1,8 @@
 import * as stylex from '@stylexjs/stylex';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { atmosphere, atmosphereSnapshot, phaseOf, subscribeAtmosphere } from '../lib/atmosphere';
 import {
-  accountsAvailable, NO_ACCOUNT, passwordPending, pendingCount, pendingEmail, sendEmailCode, setPassword, signInWithPassword, signOut,
+  accountsAvailable, deleteAccount, NO_ACCOUNT, NO_DELETE_FUNCTION, passwordPending, pendingCount, pendingEmail, sendEmailCode, setPassword, signInWithPassword, signOut,
   useDB, useSync, verifyEmailCode, type CodePurpose,
 } from '../lib/store';
 import { MAX_PASSWORD, MIN_PASSWORD, passwordOk, passwordRules } from '../lib/password';
@@ -15,11 +15,22 @@ const cardIn = stylex.keyframes({
   from: { opacity: 0, transform: 'translateY(-8px) scale(0.96)' },
   to: { opacity: 1, transform: 'translateY(0) scale(1)' },
 });
+const sheetIn = stylex.keyframes({
+  from: { transform: 'translateY(100%)' },
+  to: { transform: 'translateY(0)' },
+});
 const breathe = stylex.keyframes({
   '0%': { opacity: 1 },
   '50%': { opacity: 0.3 },
   '100%': { opacity: 1 },
 });
+
+/** 휴대폰 폭. 다른 화면(Calendar 등)과 같은 기준 */
+const PHONE = '@media (max-width: 560px)';
+/** 손잡이를 이만큼 넘게 끌어 내리면 시트를 닫는다 */
+const SHEET_CLOSE_DRAG = 80;
+/** 탈퇴 확인으로 입력해야 하는 말 */
+const DELETE_WORD = '탈퇴';
 
 const s = stylex.create({
   trigger: { height: 32, paddingInline: 10, fontSize: type.small, gap: 7, marginLeft: 4 },
@@ -27,27 +38,47 @@ const s = stylex.create({
   avatar: { width: 40, paddingInline: 0, justifyContent: 'center' },
   busy: { animationName: breathe, animationDuration: '1.2s', animationIterationCount: 'infinite' },
   off: { opacity: 0.4 },
-  scrim: { position: 'fixed', inset: 0, zIndex: 20 },
+  scrim: { position: 'fixed', inset: 0, zIndex: 20, backgroundColor: { default: 'transparent', [PHONE]: 'rgb(0 0 0 / 0.45)' } },
+  // 넓은 화면: 계정 버튼 아래 작은 카드 / 휴대폰: 아래에서 올라오는 시트 (키보드가 올라오면 그 위로 비켜 선다)
   card: {
     position: 'fixed',
     zIndex: 21,
-    top: 'calc(54px + env(safe-area-inset-top))',
-    width: 'min(340px, calc(100vw - 24px))',
+    top: { default: 'calc(54px + env(safe-area-inset-top))', [PHONE]: 'auto' },
+    right: { default: 'var(--account-right, 12px)', [PHONE]: 0 },
+    bottom: { default: 'auto', [PHONE]: 'var(--account-keyboard, 0px)' },
+    left: { default: 'auto', [PHONE]: 0 },
+    width: { default: 'min(340px, calc(100vw - 24px))', [PHONE]: '100%' },
+    maxHeight: { default: 'none', [PHONE]: 'calc(100dvh - 40px - env(safe-area-inset-top) - var(--account-keyboard, 0px))' },
+    overflowY: { default: 'visible', [PHONE]: 'auto' },
+    overscrollBehavior: 'contain',
     display: 'flex',
     flexDirection: 'column',
     gap: 12,
-    padding: 20,
+    padding: { default: 20, [PHONE]: '10px 20px calc(20px + env(safe-area-inset-bottom))' },
     backgroundColor: color.surface,
-    borderWidth: 1,
+    borderWidth: { default: 1, [PHONE]: '1px 0 0' },
     borderStyle: 'solid',
     borderColor: color.line,
-    borderRadius: radius.control,
+    borderRadius: { default: radius.control, [PHONE]: '20px 20px 0 0' },
     boxShadow: '0 30px 70px -30px rgb(0 0 0 / 0.6)',
     transformOrigin: '80% 0',
-    animationName: cardIn,
+    animationName: { default: cardIn, [PHONE]: sheetIn },
     animationDuration: dur.quick,
     animationTimingFunction: ease.out,
   },
+  // 시트 위쪽 손잡이: 아래로 끌어 내리면 닫힌다 (휴대폰에서만 보인다)
+  grip: {
+    display: { default: 'none', [PHONE]: 'flex' },
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+    height: 24,
+    marginBottom: -4,
+    touchAction: 'none',
+    cursor: 'grab',
+    '::before': { content: '""', width: 40, height: 4, borderRadius: 2, backgroundColor: color.line },
+  },
+  danger: { alignSelf: 'flex-start', marginLeft: -14, height: 36, fontSize: type.small, color: color.inkFaint },
   form: { display: 'flex', flexDirection: 'column', gap: 12 },
   title: { fontSize: type.body, fontWeight: 800 },
   text: { fontSize: type.small, lineHeight: 1.6, color: color.inkSoft },
@@ -96,7 +127,7 @@ const STATUS: Record<string, string> = {
 };
 
 /** 서버 오류를 사람이 읽을 말로 */
-function explain(err: string, context: 'signin' | 'mail' | 'code' | 'password'): string {
+function explain(err: string, context: 'signin' | 'mail' | 'code' | 'password' | 'delete'): string {
   if (/fetch|network/i.test(err)) return '연결이 안 돼요. 인터넷을 확인하고 다시 눌러 주세요.';
   if (/rate|seconds|too many/i.test(err)) return '요청이 너무 잦아요. 잠시 후에 다시 시도해 주세요.';
   if (context === 'signin') {
@@ -109,6 +140,7 @@ function explain(err: string, context: 'signin' | 'mail' | 'code' | 'password'):
     if (/invalid/i.test(err)) return '이메일 주소를 다시 확인해 주세요.';
   }
   if (context === 'code') return '코드가 맞지 않거나 만료됐어요. 메일의 코드를 다시 확인해 주세요.';
+  if (context === 'delete' && err === NO_DELETE_FUNCTION) return '탈퇴 기능이 아직 서버에 준비되지 않았어요. (README 계정 2단계 참고)';
   if (context === 'password') {
     if (/different|same/i.test(err)) return '지금 쓰는 것과 다른 비밀번호로 정해 주세요.';
     if (/least|short|weak|characters/i.test(err)) return `비밀번호는 ${MIN_PASSWORD}자 이상, 영문과 숫자를 섞어 정해 주세요.`;
@@ -135,6 +167,12 @@ export function Account() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [changing, setChanging] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmWord, setConfirmWord] = useState('');
+  // 휴대폰 키보드 높이 (시트를 그 위로 올린다)와 손잡이를 끌어 내린 거리
+  const [keyboard, setKeyboard] = useState(0);
+  const [drag, setDrag] = useState(0);
+  const dragFrom = useRef<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(authReturnError ? '메일의 링크가 만료됐거나 이미 사용됐어요. 코드를 다시 받아 주세요.' : null);
   const [right, setRight] = useState(12);
@@ -146,7 +184,20 @@ export function Account() {
     const r = btn.current?.getBoundingClientRect();
     if (r) setRight(Math.max(12, window.innerWidth - r.right));
     first.current?.focus();
-  }, [open, mode, changing]);
+  }, [open, mode, changing, deleting]);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!open || !vv) return;
+    const update = () => setKeyboard(Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)));
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+      setKeyboard(0);
+    };
+  }, [open]);
   // 로그인이 끝나면 입력하던 것들을 정리한다 (비밀번호를 화면 상태에 남겨 두지 않는다)
   const mounted = useRef(false);
   useEffect(() => {
@@ -159,6 +210,8 @@ export function Account() {
     setCode('');
     setError(null);
     setChanging(false);
+    setDeleting(false);
+    setConfirmWord('');
     if (sync.user) setMode('signin');
     // 메일 코드로 들어왔으면 비밀번호를 정할 때까지 창을 열어 둔다 (메일의 링크로 다른 탭에서 들어온 경우 포함)
     if (sync.user && passwordPending(sync.user.email)) setOpen(true);
@@ -168,6 +221,8 @@ export function Account() {
 
   const close = () => {
     setOpen(false);
+    setDrag(0);
+    dragFrom.current = null;
     btn.current?.focus();
   };
   const go = (m: Mode) => {
@@ -311,6 +366,38 @@ export function Account() {
         </p>
         {changing ? (
           passwordForm
+        ) : deleting ? (
+          <form
+            {...stylex.props(s.form)}
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (await run(deleteAccount, 'delete')) setNotice('탈퇴했어요. 계정과 기록을 모두 지웠습니다.');
+            }}
+          >
+            <p {...stylex.props(s.text)}>
+              <span {...stylex.props(s.strong)}>계정과 모든 기록(하루 · 한 해 계획)이 서버와 이 기기에서 지워지고, 되돌릴 수 없어요.</span> 다른
+              기기에 남은 사본도 다시 올라가지 않습니다. 계속하려면 아래에 "{DELETE_WORD}"를 입력하세요.
+            </p>
+            <input
+              ref={first}
+              required
+              autoComplete="off"
+              placeholder={DELETE_WORD}
+              aria-label={`확인 문구 (${DELETE_WORD})`}
+              value={confirmWord}
+              onChange={(e) => setConfirmWord(e.target.value)}
+              {...stylex.props(s.input)}
+            />
+            <button type="submit" disabled={busy || confirmWord.trim() !== DELETE_WORD} {...stylex.props(s.primary)}>
+              {busy ? '지우는 중…' : '계정과 기록 지우기'}
+            </button>
+            {errorLine}
+            {link('취소', () => {
+              setDeleting(false);
+              setConfirmWord('');
+              setError(null);
+            })}
+          </form>
         ) : (
           <div {...stylex.props(s.links)}>
             {link('비밀번호 변경', () => {
@@ -323,6 +410,17 @@ export function Account() {
               if (pendingCount() > 0) setError('아직 올리지 못한 기록이 있어 이 기기에 남겨 뒀어요. 다시 로그인하면 이어서 올라갑니다.');
               else close();
             })}
+            <button
+              type="button"
+              onClick={() => {
+                setDeleting(true);
+                setNotice(null);
+                setError(null);
+              }}
+              {...stylex.props(ui.textButton, s.danger)}
+            >
+              회원 탈퇴
+            </button>
             {errorLine}
           </div>
         )}
@@ -338,7 +436,9 @@ export function Account() {
         }}
       >
         <p {...stylex.props(s.title)}>로그인</p>
-        <p {...stylex.props(s.text)}>{carry}</p>
+        <p {...stylex.props(s.text)} role={notice ? 'status' : undefined}>
+          {notice ?? carry}
+        </p>
         {emailField}
         <input
           type="password"
@@ -468,7 +568,13 @@ export function Account() {
             role="dialog"
             aria-label="계정"
             {...stylex.props(s.card)}
-            style={{ right }}
+            style={
+              {
+                '--account-right': `${right}px`,
+                '--account-keyboard': `${keyboard}px`,
+                transform: drag ? `translateY(${drag}px)` : undefined,
+              } as CSSProperties
+            }
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
                 e.stopPropagation();
@@ -476,6 +582,26 @@ export function Account() {
               }
             }}
           >
+            <div
+              aria-hidden
+              {...stylex.props(s.grip)}
+              onPointerDown={(e) => {
+                dragFrom.current = e.clientY;
+                e.currentTarget.setPointerCapture(e.pointerId);
+              }}
+              onPointerMove={(e) => {
+                if (dragFrom.current !== null) setDrag(Math.max(0, e.clientY - dragFrom.current));
+              }}
+              onPointerUp={() => {
+                if (drag > SHEET_CLOSE_DRAG) close();
+                else setDrag(0);
+                dragFrom.current = null;
+              }}
+              onPointerCancel={() => {
+                setDrag(0);
+                dragFrom.current = null;
+              }}
+            />
             {content}
           </div>
         </>
