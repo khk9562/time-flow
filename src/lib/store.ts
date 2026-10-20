@@ -316,46 +316,84 @@ if (supabase && !demo) {
   });
 }
 
-export async function sendLoginLink(email: string): Promise<string | null> {
+/*
+ * 이메일 계정 흐름 (소셜 로그인은 이 흐름을 거치지 않는다 — 비밀번호 단계도 없다)
+ *  - 가입: 이메일 → 메일 코드 확인 → 비밀번호 정하기
+ *  - 로그인: 이메일 + 비밀번호
+ *  - 비밀번호를 잊으면: 이메일 → 메일 코드 확인 → 비밀번호 새로 정하기
+ * 코드를 확인하는 순간 로그인되므로, 비밀번호를 정하기 전까지는 "비밀번호 대기" 표시를 기기에 남긴다.
+ * 그래야 창을 닫았다 열거나 메일의 링크로 다른 탭에서 들어와도 비밀번호 단계로 이어진다.
+ */
+const PASSWORD_PENDING_KEY = 'heureum:password-pending';
+
+function markPasswordPending(email: string | null) {
+  try {
+    if (email) localStorage.setItem(PASSWORD_PENDING_KEY, email.toLowerCase());
+    else localStorage.removeItem(PASSWORD_PENDING_KEY);
+  } catch {
+    // 저장소를 못 쓰면 이번 화면 안에서만 이어 간다
+  }
+}
+
+/** 메일 코드를 보냈거나 확인했지만 아직 비밀번호를 정하지 않은 이메일 (새로고침 뒤 코드 입력을 이어 갈 때도 쓴다) */
+export function pendingEmail(): string | null {
+  try {
+    return localStorage.getItem(PASSWORD_PENDING_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** 이 이메일로 메일 코드 확인을 했지만 아직 비밀번호를 정하지 않았는지 */
+export const passwordPending = (email: string) => pendingEmail() === email.toLowerCase();
+
+export type CodePurpose = 'signup' | 'reset';
+
+/** 메일 코드 확인을 받을 계정이 없을 때 돌려주는 오류 */
+export const NO_ACCOUNT = 'no account';
+
+/**
+ * 메일로 인증 코드를 보낸다.
+ * 가입이면 계정이 없을 때 새로 만들고, 이미 가입된 이메일이면 existing 으로 알려 준다 (그대로 비밀번호 재설정이 된다).
+ * 재설정이면 없는 계정을 만들지 않는다.
+ */
+export async function sendEmailCode(email: string, purpose: CodePurpose): Promise<{ error: string | null; existing: boolean }> {
+  if (!supabase) return { error: '계정 기능이 아직 연결되지 않았습니다', existing: false };
+  const client = supabase;
+  const send = (create: boolean) =>
+    client.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname, shouldCreateUser: create } });
+  // 먼저 있는 계정에만 보내 본다. 계정이 없으면 메일이 나가지 않고 otp_disabled 가 돌아온다
+  let { error } = await send(false);
+  const noAccount = !!error && (error.code === 'otp_disabled' || /signups? not allowed for otp/i.test(error.message));
+  const existing = !error;
+  if (noAccount && purpose === 'signup') ({ error } = await send(true));
+  else if (noAccount) return { error: NO_ACCOUNT, existing: false };
+  if (error) return { error: error.message, existing: false };
+  markPasswordPending(email);
+  return { error: null, existing };
+}
+
+/** 메일에 적힌 코드를 확인한다. 맞으면 로그인되고, 이어서 비밀번호를 정해야 한다 */
+export async function verifyEmailCode(email: string, code: string): Promise<string | null> {
   if (!supabase) return '계정 기능이 아직 연결되지 않았습니다';
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: location.origin + location.pathname },
-  });
+  // 로그인 알림(onAuthStateChange)보다 먼저 남겨 둬야 화면이 바로 비밀번호 단계로 간다
+  markPasswordPending(email);
+  const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
   return error ? error.message : null;
 }
 
 export async function signInWithPassword(email: string, password: string): Promise<string | null> {
   if (!supabase) return '계정 기능이 아직 연결되지 않았습니다';
   const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (!error) markPasswordPending(null);
   return error ? error.message : null;
 }
 
-/** 가입. 'confirm' 은 Supabase 가 메일 확인을 요구하는 설정일 때 (바로 로그인되지 않는다) */
-export async function signUpWithPassword(email: string, password: string): Promise<{ error: string | null; confirm: boolean }> {
-  if (!supabase) return { error: '계정 기능이 아직 연결되지 않았습니다', confirm: false };
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: { emailRedirectTo: location.origin + location.pathname },
-  });
-  if (error) return { error: error.message, confirm: false };
-  // 메일 확인이 켜져 있으면, 이미 있는 주소로 가입해도 오류 없이 빈 사용자가 돌아온다
-  if (!data.session && data.user && data.user.identities?.length === 0) return { error: 'already registered', confirm: false };
-  return { error: null, confirm: !data.session };
-}
-
-/** 로그인한 상태에서 비밀번호를 정하거나 바꾼다 (메일로 로그인한 계정, 비밀번호를 잊은 경우) */
+/** 로그인한 상태에서 비밀번호를 정하거나 바꾼다 (가입·재설정의 마지막 단계, 계정 메뉴의 비밀번호 변경) */
 export async function setPassword(password: string): Promise<string | null> {
   if (!supabase) return '계정 기능이 아직 연결되지 않았습니다';
   const { error } = await supabase.auth.updateUser({ password });
-  return error ? error.message : null;
-}
-
-/** 메일에 적힌 코드로 로그인한다 (링크를 누를 수 없는 환경: 홈 화면 앱, 다른 기기의 메일함 등) */
-export async function verifyLoginCode(email: string, code: string): Promise<string | null> {
-  if (!supabase) return '계정 기능이 아직 연결되지 않았습니다';
-  const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
+  if (!error) markPasswordPending(null);
   return error ? error.message : null;
 }
 
@@ -369,6 +407,7 @@ export async function signOut() {
   await push();
   // 모두 올라갔다면 이 기기에 남은 계정 사본은 지운다 (함께 쓰는 기기 대비). 못 올린 게 있으면 남겨 둔다.
   discardCache = meta.dirty.length === 0;
+  markPasswordPending(null);
   await supabase.auth.signOut();
 }
 
