@@ -7,7 +7,7 @@ import {
 import { dayKey, pad2, useSlowNow, WEEKDAYS, WEEKDAYS_EN } from '../lib/time';
 import { color, dur, ease, radius, type } from '../tokens.stylex';
 import { Timeline } from './Timeline';
-import { AutoTextarea, Check, ui } from './ui';
+import { AutoTextarea, Check, NO_SWIPE, ui, useKeepFocusVisible, useKeyboardInset, useSwipe } from './ui';
 
 const sheetIn = stylex.keyframes({
   from: { opacity: 0, transform: 'translateX(56px) rotate(0.5deg)' },
@@ -121,14 +121,14 @@ const s = stylex.create({
   table: {
     flexGrow: 1,
     display: 'grid',
-    gridTemplateRows: 'repeat(12, minmax(31px, 1fr))',
+    gridTemplateRows: { default: 'repeat(12, minmax(31px, 1fr))', '@media (pointer: coarse)': 'repeat(12, minmax(40px, 1fr))' },
     borderTopWidth: 1.5,
     borderTopStyle: 'solid',
     borderTopColor: color.lineStrong,
   },
   row: {
     display: 'grid',
-    gridTemplateColumns: 'clamp(44px, 15%, 68px) minmax(0, 1fr) 36px',
+    gridTemplateColumns: { default: 'clamp(44px, 15%, 68px) minmax(0, 1fr) 36px', '@media (pointer: coarse)': 'clamp(44px, 15%, 68px) minmax(0, 1fr) 44px' },
     borderBottomWidth: 1,
     borderBottomStyle: 'solid',
     borderBottomColor: color.line,
@@ -197,7 +197,7 @@ const tray = stylex.create({
   root: { display: 'flex', alignItems: 'flex-start', gap: 2 },
   tool: {
     position: 'relative',
-    width: 34,
+    width: { default: 34, '@media (pointer: coarse)': 40 },
     height: 54,
     display: 'flex',
     flexDirection: 'column',
@@ -220,7 +220,7 @@ const tray = stylex.create({
     transitionProperty: 'transform, border-color',
     transitionDuration: dur.quick,
     transitionTimingFunction: ease.spring,
-    transform: { default: 'translateY(0)', ':hover': 'translateY(3px)' },
+    transform: { default: 'translateY(0)', ':hover': { default: null, '@media (hover: hover)': 'translateY(3px)' } },
   },
   penOn: { transform: 'translateY(9px)', borderColor: color.ink },
   tip: { display: 'block', width: '100%', height: '58%', marginTop: '42%', clipPath: 'polygon(0 0, 100% 0, 100% 62%, 30% 100%, 0 100%)' },
@@ -231,7 +231,7 @@ const tray = stylex.create({
     left: -4,
     right: -4,
     textAlign: 'center',
-    fontSize: 9.5,
+    fontSize: { default: 9.5, '@media (max-width: 560px)': 11 },
     fontWeight: 700,
     lineHeight: 1,
     color: color.inkSoft,
@@ -340,6 +340,7 @@ function TaskRow({
         />
         {tool !== 0 && (
           <div
+            {...NO_SWIPE}
             {...stylex.props(s.penLayer)}
             onPointerDown={(e) => {
               if (e.button !== 0) return;
@@ -407,9 +408,14 @@ export function Planner({ year, month, day, leaving, onBack, onStep }: Props) {
   const minutes = [0, 0, 0, 0, 0, 0];
   for (const c of entry.cells) if (c > 0) minutes[c] += 10;
   const totalMin = minutes.reduce((a, b) => a + b, 0);
+  // 왼쪽으로 밀면 다음 날, 오른쪽으로 밀면 전날, 왼쪽 끝에서 밀면 달력으로. 형광펜을 긋는 곳은 제외된다
+  const swipe = useSwipe({ onNext: () => onStep(1), onPrev: () => onStep(-1), onBack });
+  // 키보드가 아래 칸(메모 등)을 가리지 않도록 그 높이만큼 스크롤 아래를 비운다
+  const keyboard = useKeyboardInset(!leaving);
+  useKeepFocusVisible(keyboard);
 
   return (
-    <div {...stylex.props(s.root, leaving && s.leaving)}>
+    <div {...stylex.props(s.root, leaving && s.leaving)} {...swipe}>
       <div {...stylex.props(s.bar)}>
         <div {...stylex.props(s.barLeft)}>
           <button type="button" onClick={onBack} aria-label="달력으로 돌아가기" {...stylex.props(ui.textButton)}>
@@ -433,7 +439,7 @@ export function Planner({ year, month, day, leaving, onBack, onStep }: Props) {
         </div>
       </div>
 
-      <div {...stylex.props(s.scroll)}>
+      <div {...stylex.props(s.scroll)} style={keyboard ? { paddingBottom: keyboard + 20 } : undefined}>
         <article key={key} {...stylex.props(s.sheet)} aria-label={`${year}년 ${month}월 ${day}일 플래너`}>
           <div {...stylex.props(s.head)}>
             <div {...stylex.props(s.field)}>

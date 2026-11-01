@@ -23,6 +23,10 @@ body {
   overscroll-behavior: none;
 }
 
+/* 두 번 톡 눌러 확대되는 것을 막는다 (두 손가락 확대는 남는다).
+   touch-action 은 스크롤 영역에서 끊기므로 모든 요소에 건다. 컴포넌트가 정한 값(none, pan-y)이 우선한다. */
+* { touch-action: manipulation; }
+
 button, input, textarea { font: inherit; color: inherit; }
 button { background: none; border: 0; padding: 0; cursor: pointer; }
 input, textarea { background: none; border: 0; padding: 0; margin: 0; outline: none; border-radius: 0; resize: none; }

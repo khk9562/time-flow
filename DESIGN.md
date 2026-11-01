@@ -54,6 +54,10 @@ ADHD가 있는 사람도 한 해를 "지금 어디쯤인지" 한눈에 보고, �
 ## 토큰과 구현 위치
 - 토큰: `src/tokens.stylex.ts` (color / ease / dur / type / radius). 전역 기본값·폰트: `src/global.css`.
 - 반복 역할: 버튼·라벨·체크·자동 높이 입력 → `src/components/ui.tsx`.
+- 휴대폰: hover 효과는 `@media (hover: hover)` 안에서만(터치 후 남지 않게), 손가락 기기(`pointer: coarse`)에서는 누를 곳을 40–44px 로 넓힌다.
+  화면 높이 비율은 `vh` 대신 `svh`.
+  달력·플래너는 좌우로 밀어 넘긴다(왼쪽=다음, 오른쪽=이전, 왼쪽 끝에서=뒤로, `useSwipe`). 형광펜을 긋는 곳은 `NO_SWIPE` 로 제외.
+  키보드가 올라오면 `useKeyboardInset` 높이만큼 스크롤 아래를 비우고 쓰던 칸을 다시 보이게 한다(계정 시트·플래너·연간 계획). 입력칸 자동 확대는 `index.html` 에서 iOS 에만 `maximum-scale=1`, 두 번 눌러 확대는 `touch-action: manipulation` 으로 막는다.
 - 움직임: 눌림 140ms, 상태 변화 260ms, 요소 이동 520ms, 화면 구성 변화 880ms.
   다이얼은 스프링(끌기·관성·스냅), 캔버스는 `useCanvas` 한 곳에서 루프와 리사이즈를 맡는다.
 

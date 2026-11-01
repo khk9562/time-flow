@@ -5,7 +5,7 @@ import { dayHasContent, PEN_COLORS, useDB, type DayEntry } from '../lib/store';
 import { dayKey, daysInMonth, monthProgress, MONTHS_EN, now, useSlowNow, WEEKDAYS, WEEKDAYS_SHORT } from '../lib/time';
 import { color, dur, ease, radius, type } from '../tokens.stylex';
 import { FlowBar } from './FlowBar';
-import { ui } from './ui';
+import { ui, useSwipe } from './ui';
 
 const riseIn = stylex.keyframes({
   from: { opacity: 0, transform: 'translateY(14px) scale(0.92)' },
@@ -55,7 +55,7 @@ const s = stylex.create({
     animationFillMode: 'both',
   },
   head: { display: 'flex', alignItems: 'flex-end', gap: 16, marginBottom: 14 },
-  num: { fontSize: 'clamp(72px, 15vh, 132px)', fontWeight: 200, lineHeight: 0.82, letterSpacing: '-0.04em', fontVariantNumeric: 'tabular-nums' },
+  num: { fontSize: 'clamp(72px, 15svh, 132px)', fontWeight: 200, lineHeight: 0.82, letterSpacing: '-0.04em', fontVariantNumeric: 'tabular-nums' },
   headText: { display: 'flex', flexDirection: 'column', gap: 4, paddingBottom: 4 },
   en: { fontSize: type.small, fontWeight: 700, letterSpacing: '0.22em' },
   yr: { fontSize: type.small, fontWeight: 500, color: color.inkSoft, letterSpacing: '0.1em' },
@@ -69,13 +69,13 @@ const s = stylex.create({
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 'clamp(46px, 8.4vh, 68px)',
+    height: 'clamp(46px, 8.4svh, 68px)',
     borderRadius: radius.control,
-    fontSize: 'clamp(15px, 2.3vh, 19px)',
+    fontSize: 'clamp(15px, 2.3svh, 19px)',
     fontWeight: 500,
     fontVariantNumeric: 'tabular-nums',
     color: color.ink,
-    backgroundColor: { default: 'transparent', ':hover': color.wash, ':active': color.washStrong },
+    backgroundColor: { default: 'transparent', ':hover': { default: null, '@media (hover: hover)': color.wash }, ':active': color.washStrong },
     transitionProperty: 'background-color, transform',
     transitionDuration: dur.tap,
     transform: { default: 'none', ':active': 'scale(0.9)' },
@@ -133,9 +133,11 @@ export function Calendar({ year, month, leaving, onPick, onClose, onStep }: Prop
   const count = daysInMonth(year, month);
   const todayKey = dayKey(today.getFullYear(), today.getMonth() + 1, today.getDate());
   const alpha = atmosphere.dark ? 0.85 : 1;
+  // 왼쪽으로 밀면 다음 달, 오른쪽으로 밀면 지난달, 왼쪽 끝에서 밀면 달력을 닫는다
+  const swipe = useSwipe({ onNext: () => onStep(1), onPrev: () => onStep(-1), onBack: onClose });
 
   return (
-    <div {...stylex.props(s.root, leaving && s.leaving)}>
+    <div {...stylex.props(s.root, leaving && s.leaving)} {...swipe}>
       <div {...stylex.props(s.top)}>
         <button type="button" aria-label="달력 닫기" onClick={onClose} {...stylex.props(ui.iconButton, ui.navButton)}>
           ←

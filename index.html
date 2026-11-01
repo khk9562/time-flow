@@ -3,6 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <script>
+      // iOS 는 16px 보다 작은 입력칸을 누르면 화면을 확대하고 되돌리지 않는다.
+      // maximum-scale=1 은 iOS 에서 이 자동 확대만 막고 두 손가락 확대는 그대로 둔다.
+      // 안드로이드는 같은 값이면 손가락 확대까지 막히므로 iOS 에만 건다.
+      if (/iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent))) {
+        document.querySelector('meta[name=viewport]').content += ', maximum-scale=1';
+      }
+    </script>
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#0e0e0f" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />

@@ -5,6 +5,7 @@ import { rgba, seeded } from '../lib/canvas';
 import { FIRST_HOUR, penRGB, TIME_COLS, TIME_ROWS } from '../lib/store';
 import { now } from '../lib/time';
 import { color } from '../tokens.stylex';
+import { NO_SWIPE } from './ui';
 
 const s = stylex.create({
   root: { display: 'grid', gridTemplateColumns: '22px minmax(0, 1fr)', flexGrow: 1, minHeight: 0 },
@@ -15,7 +16,7 @@ const s = stylex.create({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 10.5,
+    fontSize: { default: 10.5, '@media (max-width: 560px)': 12 },
     fontWeight: 500,
     lineHeight: 1,
     color: color.inkSoft,
@@ -223,6 +224,8 @@ export function Timeline(props: Props) {
         tabIndex={0}
         role="img"
         aria-label="타임라인. 형광펜으로 10분 단위 칸을 칠합니다. 방향키로 칸을 옮기고 스페이스로 칠합니다."
+        // 가로로 긋는 획이 날짜 넘기기로 읽히지 않게
+        {...NO_SWIPE}
         {...stylex.props(s.canvas)}
         onFocus={(e) => {
           st.focus = e.currentTarget.matches(':focus-visible');

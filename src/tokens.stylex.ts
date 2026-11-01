@@ -28,7 +28,8 @@ export const dur = stylex.defineVars({
 });
 
 export const type = stylex.defineVars({
-  label: '10.5px',
+  // 휴대폰에서는 영문 라벨이 너무 작아 한 단계 키운다
+  label: { default: '10.5px', '@media (max-width: 560px)': '11.5px' },
   small: '12.5px',
   body: '15px',
   title: '22px',

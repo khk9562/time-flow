@@ -8,7 +8,7 @@ const s = stylex.create({
   bar: { display: 'flex', alignItems: 'center', gap: 2 },
   item: {
     position: 'relative',
-    height: 32,
+    height: { default: 32, '@media (pointer: coarse)': 44 },
     // 글자가 세로로 꺾이지 않게 하고, 아주 좁은 화면에서는 버튼 사이를 좁힌다
     whiteSpace: 'nowrap',
     paddingInline: { default: 8, '@media (max-width: 360px)': 4 },
@@ -19,7 +19,7 @@ const s = stylex.create({
     transitionProperty: 'color, background-color',
     transitionDuration: dur.quick,
     transitionTimingFunction: ease.out,
-    backgroundColor: { default: 'transparent', ':hover': color.wash },
+    backgroundColor: { default: 'transparent', ':hover': { default: null, '@media (hover: hover)': color.wash } },
     outlineStyle: { default: 'none', ':focus-visible': 'solid' },
     outlineWidth: 2,
     outlineColor: color.ink,

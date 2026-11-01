@@ -4,7 +4,7 @@ import { emptyYear, getYearPlan, newGoal, updateYearPlan, useDB, type Goal } fro
 import { now } from '../lib/time';
 import { color, dur, ease, type } from '../tokens.stylex';
 import { FlowBar } from './FlowBar';
-import { AutoTextarea, Check, ui, useMedia } from './ui';
+import { AutoTextarea, Check, ui, useKeepFocusVisible, useKeyboardInset, useMedia } from './ui';
 import { YearMap } from './YearMap';
 
 const MAX_GOALS = 5;
@@ -110,19 +110,19 @@ const s = stylex.create({
     borderBottomColor: { default: color.line, ':focus': color.ink },
     '::placeholder': { color: color.inkFaint },
   },
-  months: { display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 },
+  months: { display: 'flex', flexWrap: 'wrap', gap: { default: 4, '@media (pointer: coarse)': 6 }, marginTop: 6 },
   month: {
-    width: 30,
-    height: 30,
+    width: { default: 30, '@media (pointer: coarse)': 40 },
+    height: { default: 30, '@media (pointer: coarse)': 40 },
     borderRadius: '50%',
-    fontSize: 11.5,
+    fontSize: { default: 11.5, '@media (pointer: coarse)': 13 },
     fontWeight: 600,
     fontVariantNumeric: 'tabular-nums',
     color: color.inkSoft,
     borderWidth: 1,
     borderStyle: 'solid',
     borderColor: color.line,
-    backgroundColor: { default: 'transparent', ':hover': color.wash },
+    backgroundColor: { default: 'transparent', ':hover': { default: null, '@media (hover: hover)': color.wash } },
     transitionProperty: 'background-color, color, transform, border-color',
     transitionDuration: dur.quick,
     transitionTimingFunction: ease.spring,
@@ -132,7 +132,7 @@ const s = stylex.create({
     outlineColor: color.ink,
     outlineOffset: 2,
   },
-  monthOn: { backgroundColor: { default: color.ink, ':hover': color.ink }, borderColor: color.ink, color: color.inverse },
+  monthOn: { backgroundColor: { default: color.ink, ':hover': { default: null, '@media (hover: hover)': color.ink } }, borderColor: color.ink, color: color.inverse },
   side: { display: 'flex', flexDirection: 'column', alignItems: 'center' },
   remove: { fontSize: 18, color: color.inkSoft },
   confirm: { fontSize: type.small, fontWeight: 700, width: 'auto', paddingInline: 12 },
@@ -175,6 +175,9 @@ export function YearPage({ year, origin, leaving, onClose, onOpenDay }: Props) {
     return Math.max(0, Math.min(1, (now().getTime() - a) / (b - a)));
   };
   const delay = (ms: number) => ({ animationDelay: `${ms}ms` });
+  // 키보드가 아래쪽 목표 칸을 가리지 않도록 그 높이만큼 아래를 비운다
+  const keyboard = useKeyboardInset(!leaving);
+  useKeepFocusVisible(keyboard);
 
   return (
     <div role="dialog" aria-modal="true" aria-label={`${year}년 계획`} {...stylex.props(s.root, leaving && s.leaving)}>
@@ -185,7 +188,7 @@ export function YearPage({ year, origin, leaving, onClose, onOpenDay }: Props) {
         </button>
       </div>
 
-      <div {...stylex.props(s.grid)}>
+      <div {...stylex.props(s.grid)} style={keyboard ? { paddingBottom: keyboard + 40 } : undefined}>
         <div {...stylex.props(s.col)}>
           <h2 {...stylex.props(s.year, s.enter)} style={delay(80)}>
             {year}

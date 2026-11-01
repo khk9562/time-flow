@@ -1,5 +1,5 @@
 import * as stylex from '@stylexjs/stylex';
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type TextareaHTMLAttributes } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type TextareaHTMLAttributes, type TouchEvent } from 'react';
 import { color, dur, ease, radius, type } from '../tokens.stylex';
 
 export const ui = stylex.create({
@@ -14,7 +14,7 @@ export const ui = stylex.create({
     color: color.ink,
     fontSize: 20,
     lineHeight: 1,
-    backgroundColor: { default: 'transparent', ':hover': color.wash, ':active': color.washStrong },
+    backgroundColor: { default: 'transparent', ':hover': { default: null, '@media (hover: hover)': color.wash }, ':active': color.washStrong },
     transitionProperty: 'background-color, transform',
     transitionDuration: dur.tap,
     transform: { default: 'none', ':active': 'scale(0.92)' },
@@ -37,7 +37,7 @@ export const ui = stylex.create({
     fontWeight: 600,
     color: color.ink,
     whiteSpace: 'nowrap',
-    backgroundColor: { default: 'transparent', ':hover': color.wash, ':active': color.washStrong },
+    backgroundColor: { default: 'transparent', ':hover': { default: null, '@media (hover: hover)': color.wash }, ':active': color.washStrong },
     transitionProperty: 'background-color, transform',
     transitionDuration: dur.tap,
     transform: { default: 'none', ':active': 'scale(0.96)' },
@@ -74,6 +74,85 @@ export function useMedia(query: string) {
     },
     () => window.matchMedia(query).matches,
   );
+}
+
+/**
+ * 화면 키보드가 가린 높이(px). 키보드가 없거나 active 가 아니면 0.
+ * iOS 는 키보드가 올라와도 레이아웃 높이를 줄이지 않으므로, 이 값만큼 아래를 비워야 입력칸이 키보드 위로 올라온다.
+ */
+export function useKeyboardInset(active = true) {
+  const [inset, setInset] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!active || !vv) return;
+    const update = () => setInset(Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)));
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+      setInset(0);
+    };
+  }, [active]);
+  return inset;
+}
+
+/** 키보드가 올라와 화면이 줄면, 글을 쓰고 있는 칸을 보이는 곳으로 다시 데려온다 */
+export function useKeepFocusVisible(inset: number) {
+  useEffect(() => {
+    if (!inset) return;
+    const el = document.activeElement;
+    if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return;
+    // 레이아웃(아래 여백)이 반영된 다음에 옮긴다
+    const id = requestAnimationFrame(() => el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+    return () => cancelAnimationFrame(id);
+  }, [inset]);
+}
+
+/** 이 표시가 붙은 곳(형광펜을 긋는 칸, 다이얼 등)에서 시작한 손짓은 넘기기로 보지 않는다 */
+export const NO_SWIPE = { 'data-noswipe': '' } as const;
+const SWIPE_MIN = 56;
+const SWIPE_MAX_MS = 700;
+const EDGE = 28;
+
+/**
+ * 손가락으로 좌우로 밀어 넘기기. 왼쪽으로 밀면 다음, 오른쪽으로 밀면 이전,
+ * 화면 왼쪽 끝에서 오른쪽으로 밀면 뒤로. 세로 스크롤과 헷갈리지 않게 가로로 분명히 민 것만 받는다.
+ */
+export function useSwipe(h: { onNext: () => void; onPrev: () => void; onBack?: () => void }) {
+  const st = useRef<null | { x: number; y: number; t: number; edge: boolean }>(null);
+  const H = useRef(h);
+  H.current = h;
+  return {
+    onTouchStart: (e: TouchEvent) => {
+      st.current = null;
+      if (e.touches.length !== 1) return;
+      const target = e.target as Element;
+      if (target.closest('[data-noswipe]')) return;
+      // 글을 쓰는 중인 칸 안에서는 커서 옮기기·글자 고르기를 그대로 둔다
+      const el = document.activeElement;
+      if ((el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) && el.contains(target)) return;
+      const t = e.touches[0];
+      st.current = { x: t.clientX, y: t.clientY, t: performance.now(), edge: t.clientX < EDGE };
+    },
+    onTouchEnd: (e: TouchEvent) => {
+      const s = st.current;
+      st.current = null;
+      if (!s || e.changedTouches.length !== 1) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - s.x;
+      const dy = t.clientY - s.y;
+      if (performance.now() - s.t > SWIPE_MAX_MS) return;
+      if (Math.abs(dx) < SWIPE_MIN || Math.abs(dy) > Math.abs(dx) * 0.6) return;
+      if (dx > 0 && s.edge && H.current.onBack) H.current.onBack();
+      else if (dx > 0) H.current.onPrev();
+      else H.current.onNext();
+    },
+    onTouchCancel: () => {
+      st.current = null;
+    },
+  };
 }
 
 /** 나타남/사라짐 전환을 위해 사라지는 동안에도 잠시 남겨둔다 */
@@ -135,7 +214,7 @@ const ck = stylex.create({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: { default: 'transparent', ':hover': color.wash },
+    backgroundColor: { default: 'transparent', ':hover': { default: null, '@media (hover: hover)': color.wash } },
     transitionProperty: 'background-color',
     transitionDuration: dur.tap,
     outlineStyle: { default: 'none', ':focus-visible': 'solid' },
