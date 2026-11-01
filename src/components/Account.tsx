@@ -9,7 +9,7 @@ import { MAX_PASSWORD, MIN_PASSWORD, passwordOk, passwordRules } from '../lib/pa
 import { authReturnError, supabase } from '../lib/supabase';
 import { color, dur, ease, radius, type } from '../tokens.stylex';
 import { PhaseIcon } from './PhaseIcon';
-import { ui } from './ui';
+import { ui, useKeyboardInset } from './ui';
 
 const cardIn = stylex.keyframes({
   from: { opacity: 0, transform: 'translateY(-8px) scale(0.96)' },
@@ -33,7 +33,7 @@ const SHEET_CLOSE_DRAG = 80;
 const DELETE_WORD = '탈퇴';
 
 const s = stylex.create({
-  trigger: { height: 32, paddingInline: 10, fontSize: type.small, gap: 7, marginLeft: 4 },
+  trigger: { height: { default: 32, '@media (pointer: coarse)': 44 }, paddingInline: 10, fontSize: type.small, gap: 7, marginLeft: 4 },
   // 로그인하면 아이디 대신 지금 시간대의 그림이 프로필처럼 선다. 동기화 중에는 숨 쉬고, 끊기면 흐려진다.
   avatar: { width: 40, paddingInline: 0, justifyContent: 'center' },
   busy: { animationName: breathe, animationDuration: '1.2s', animationIterationCount: 'infinite' },
@@ -78,7 +78,7 @@ const s = stylex.create({
     cursor: 'grab',
     '::before': { content: '""', width: 40, height: 4, borderRadius: 2, backgroundColor: color.line },
   },
-  danger: { alignSelf: 'flex-start', marginLeft: -14, height: 36, fontSize: type.small, color: color.inkFaint },
+  danger: { alignSelf: 'flex-start', marginLeft: -14, height: { default: 36, '@media (pointer: coarse)': 44 }, fontSize: type.small, color: color.inkFaint },
   form: { display: 'flex', flexDirection: 'column', gap: 12 },
   title: { fontSize: type.body, fontWeight: 800 },
   text: { fontSize: type.small, lineHeight: 1.6, color: color.inkSoft },
@@ -112,7 +112,7 @@ const s = stylex.create({
     outlineColor: color.ink,
     outlineOffset: 3,
   },
-  secondary: { alignSelf: 'flex-start', marginLeft: -14, height: 36, fontSize: type.small },
+  secondary: { alignSelf: 'flex-start', marginLeft: -14, height: { default: 36, '@media (pointer: coarse)': 44 }, fontSize: type.small },
   links: { display: 'flex', flexDirection: 'column', alignItems: 'flex-start' },
   error: { fontSize: type.small, lineHeight: 1.5, color: color.ink, fontWeight: 600 },
   rules: { listStyle: 'none', padding: 0, margin: 0, marginTop: -4, display: 'flex', flexDirection: 'column', gap: 2, fontSize: type.small, lineHeight: 1.5, color: color.inkFaint },
@@ -157,6 +157,8 @@ export function Account() {
   const phase = phaseOf(atmosphere.preview ?? atmosphere.hour);
   const db = useDB();
   const [open, setOpen] = useState(!!authReturnError);
+  // 휴대폰 시트는 키보드가 올라오면 그 높이만큼 위로 비켜 선다
+  const keyboard = useKeyboardInset(open);
   const [mode, setMode] = useState<Mode>('signin');
   const [purpose, setPurpose] = useState<CodePurpose>('signup');
   const [existing, setExisting] = useState(false);
@@ -170,7 +172,6 @@ export function Account() {
   const [deleting, setDeleting] = useState(false);
   const [confirmWord, setConfirmWord] = useState('');
   // 휴대폰 키보드 높이 (시트를 그 위로 올린다)와 손잡이를 끌어 내린 거리
-  const [keyboard, setKeyboard] = useState(0);
   const [drag, setDrag] = useState(0);
   const dragFrom = useRef<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -185,19 +186,6 @@ export function Account() {
     if (r) setRight(Math.max(12, window.innerWidth - r.right));
     first.current?.focus();
   }, [open, mode, changing, deleting]);
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!open || !vv) return;
-    const update = () => setKeyboard(Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)));
-    update();
-    vv.addEventListener('resize', update);
-    vv.addEventListener('scroll', update);
-    return () => {
-      vv.removeEventListener('resize', update);
-      vv.removeEventListener('scroll', update);
-      setKeyboard(0);
-    };
-  }, [open]);
   // 로그인이 끝나면 입력하던 것들을 정리한다 (비밀번호를 화면 상태에 남겨 두지 않는다)
   const mounted = useRef(false);
   useEffect(() => {

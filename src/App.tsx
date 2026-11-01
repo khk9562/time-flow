@@ -52,14 +52,15 @@ const s = stylex.create({
   brand: {
     flexShrink: 0,
     whiteSpace: 'nowrap',
-    height: 32,
+    // 손가락으로 누르는 기기에서는 누를 수 있는 높이를 44px 로 (헤더 높이 안에 들어간다)
+    height: { default: 32, '@media (pointer: coarse)': 44 },
     paddingInline: 8,
     borderRadius: 999,
     fontWeight: 800,
     fontSize: 15,
     letterSpacing: '0.04em',
     color: color.ink,
-    backgroundColor: { default: 'transparent', ':hover': color.wash, ':active': color.washStrong },
+    backgroundColor: { default: 'transparent', ':hover': { default: null, '@media (hover: hover)': color.wash }, ':active': color.washStrong },
     transitionProperty: 'background-color, transform',
     transitionDuration: dur.tap,
     transform: { default: 'none', ':active': 'scale(0.95)' },
