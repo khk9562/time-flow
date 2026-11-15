@@ -462,6 +462,8 @@ export function updateTask(key: string, index: number, patch: Partial<Task>) {
 export type RoutineStats = {
   /** 처음 체크한 날 (없으면 null) */
   first: string | null;
+  /** 가장 최근에 체크한 날 (없으면 null) */
+  last: string | null;
   /** 오늘까지 체크한 날 수 */
   count: number;
   /** 체크한 날 */
@@ -489,7 +491,11 @@ export function routineStats(d: DB, goalId: string, today: string): RoutineStats
     else if (any) planned.add(k);
   }
   let first: string | null = null;
-  for (const k of done) if (!first || k < first) first = k;
+  let last: string | null = null;
+  for (const k of done) {
+    if (!first || k < first) first = k;
+    if (!last || k > last) last = k;
+  }
   let streak = 0;
   const c = new Date(+today.slice(0, 4), +today.slice(5, 7) - 1, +today.slice(8, 10));
   const keyOf = (x: Date) => dayKey(x.getFullYear(), x.getMonth() + 1, x.getDate());
@@ -499,7 +505,7 @@ export function routineStats(d: DB, goalId: string, today: string): RoutineStats
     streak++;
     c.setDate(c.getDate() - 1);
   }
-  return { first, count: done.size, done, planned, streak };
+  return { first, last, count: done.size, done, planned, streak };
 }
 
 export function getYearPlan(d: DB, year: number): YearPlan | undefined {

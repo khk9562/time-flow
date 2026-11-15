@@ -4,9 +4,9 @@ import { emptyYear, getYearPlan, newGoal, routineStats, updateYearPlan, useDB, t
 import { dayKey, now, useSlowNow } from '../lib/time';
 import { color, dur, ease, type } from '../tokens.stylex';
 import { FlowBar } from './FlowBar';
-import { RoutineTrack } from './RoutineTrack';
-import { AutoTextarea, Check, ui, useKeepFocusVisible, useKeyboardInset, useMedia } from './ui';
-import { YearMap } from './YearMap';
+import { RoutineOverview, RoutineTrack } from './RoutineTrack';
+import { AutoTextarea, Check, ui, useKeepFocusVisible, useKeyboardInset } from './ui';
+import { YearHeatmap } from './YearHeatmap';
 
 const MAX_GOALS = 5;
 
@@ -79,6 +79,7 @@ const s = stylex.create({
     '::placeholder': { color: color.inkFaint },
   },
   section: { marginTop: 34 },
+  mapSection: { display: 'flex', flexDirection: 'column', gap: 14 },
   goalsHead: { display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6, marginTop: 8 },
   count: { fontSize: type.small, color: color.inkSoft, fontVariantNumeric: 'tabular-nums' },
   goal: {
@@ -112,19 +113,19 @@ type Props = {
   origin: { x: number; y: number } | null;
   leaving: boolean;
   onClose: () => void;
-  onOpenDay: (month: number, day: number) => void;
 };
 
-export function YearPage({ year, origin, leaving, onClose, onOpenDay }: Props) {
+export function YearPage({ year, origin, leaving, onClose }: Props) {
   const db = useDB();
   const draft = useMemo(emptyYear, [year]);
   const plan = getYearPlan(db, year) ?? draft;
   const [confirm, setConfirm] = useState<string | null>(null);
   const clock = useSlowNow();
   const todayKey = dayKey(clock.getFullYear(), clock.getMonth() + 1, clock.getDate());
-  // 휴대폰에서는 365개의 점이 너무 작아 누를 수 없다. 날짜는 메인 화면에서 달을 골라 들어간다
-  const phone = useMedia('(max-width: 560px)');
 
+  const named = plan.goals.filter((g) => g.title.trim());
+  const statsById = new Map(named.map((g) => [g.id, routineStats(db, g.id, todayKey)]));
+  const anyRecord = [...statsById.values()].some((st) => st.first || st.planned.size);
   const patchGoal = (id: string, patch: Partial<Goal>) =>
     updateYearPlan(year, { ...plan, goals: plan.goals.map((g) => (g.id === id ? { ...g, ...patch } : g)) });
   const removeGoal = (g: Goal) => {
@@ -174,12 +175,10 @@ export function YearPage({ year, origin, leaving, onClose, onOpenDay }: Props) {
               xstyle={s.motto}
             />
           </label>
-          {!phone && (
-            <div {...stylex.props(s.section, s.enter)} style={delay(340)}>
-              <span {...stylex.props(ui.label)}>365일</span>
-              <YearMap year={year} onOpenDay={onOpenDay} />
-            </div>
-          )}
+          <div {...stylex.props(s.section, s.mapSection, s.enter)} style={delay(340)}>
+            <span {...stylex.props(ui.label)}>365일 할 일</span>
+            <YearHeatmap year={year} />
+          </div>
         </div>
 
         <div {...stylex.props(s.col)}>
@@ -189,6 +188,17 @@ export function YearPage({ year, origin, leaving, onClose, onOpenDay }: Props) {
               {plan.goals.length} / {MAX_GOALS}
             </span>
           </div>
+          {anyRecord && (
+            <div {...stylex.props(s.enter)} style={delay(240)}>
+              <RoutineOverview
+                today={todayKey}
+                rows={plan.goals.flatMap((goal, index) => {
+                  const st = statsById.get(goal.id);
+                  return st ? [{ goal, index, stats: st }] : [];
+                })}
+              />
+            </div>
+          )}
           {plan.goals.map((g, i) => (
             <div key={g.id} {...stylex.props(s.goal, s.enter)} style={delay(260 + i * 70)}>
               <span aria-hidden {...stylex.props(s.goalNo)}>
@@ -202,7 +212,7 @@ export function YearPage({ year, origin, leaving, onClose, onOpenDay }: Props) {
                   onChange={(e) => patchGoal(g.id, { title: e.target.value })}
                   {...stylex.props(s.title, g.done && s.titleDone)}
                 />
-                {g.title.trim() && <RoutineTrack stats={routineStats(db, g.id, todayKey)} today={todayKey} title={g.title} />}
+                {statsById.has(g.id) && <RoutineTrack stats={statsById.get(g.id)!} today={todayKey} title={g.title} />}
               </div>
               <div {...stylex.props(s.side)}>
                 <Check checked={g.done} onChange={(v) => patchGoal(g.id, { done: v })} label={`목표 루틴 ${i + 1} 달성`} variant="round" />
