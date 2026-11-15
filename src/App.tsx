@@ -314,10 +314,6 @@ export function App() {
           origin={origin}
           leaving={page.leaving}
           onClose={() => setView((v) => ({ ...v, page: false }))}
-          onOpenDay={(month, day) => {
-            setMonthCursor(month);
-            setView((v) => ({ ...v, page: false, engaged: true, month, day }));
-          }}
         />
       )}
     </div>

@@ -8,7 +8,8 @@ export const TIME_ROWS = 24; // 6시 → 다음날 5시
 export const TIME_COLS = 6; // 10분 단위
 export const FIRST_HOUR = 6;
 
-export type Task = { tag: string; text: string; done: boolean; hl: number };
+/** goal: 목표 루틴에서 채워 넣은 할 일이면 그 루틴의 id */
+export type Task = { tag: string; text: string; done: boolean; hl: number; goal?: string };
 export type DayEntry = {
   dday: string;
   comment: string;
@@ -17,6 +18,7 @@ export type DayEntry = {
   cells: number[]; // 0 = 비어 있음, 1..5 = 형광펜 색
   memo: string;
 };
+// step·months 는 예전 기록과의 호환을 위해 남겨 둔 칸 (화면에서는 더 쓰지 않는다)
 export type Goal = { id: string; title: string; step: string; months: boolean[]; done: boolean };
 export type YearPlan = { motto: string; goals: Goal[] };
 type DB = { v: 1; years: Record<string, YearPlan>; days: Record<string, DayEntry> };
@@ -67,13 +69,11 @@ function seedDemo(): DB {
       { ...newGoal(), title: '책 12권 읽기', step: '가방에 책 한 권 넣기', months: new Array(12).fill(false).map((_, i) => i % 2 === 0) },
     ],
   };
+  const run = { ...newGoal(), id: 'demo-run', title: '한강 달리기 3km' };
+  const jp = { ...newGoal(), id: 'demo-jp', title: '일본어 히라가나 한 행' };
   db.years[y] = {
     motto: '작게 시작해서 매일 닿기',
-    goals: [
-      { ...newGoal(), title: '포트폴리오 사이트 공개', step: '첫 화면 스케치 한 장 그리기', months: new Array(12).fill(false).map((_, i) => i >= 8) },
-      { ...newGoal(), title: '주 3회 달리기', step: '운동화를 현관에 꺼내 두기', months: new Array(12).fill(true) },
-      { ...newGoal(), title: '일본어 회화 입문', step: '히라가나 5글자 따라 쓰기', months: new Array(12).fill(false).map((_, i) => i >= 9) },
-    ],
+    goals: [{ ...newGoal(), id: 'demo-folio', title: '포트폴리오 첫 화면 작업' }, run, jp],
   };
   const paint = (cells: number[], color: number, fromHour: number, fromMin: number, toHour: number, toMin: number) => {
     const idx = (h: number, mm: number) => ((h - FIRST_HOUR + 24) % 24) * TIME_COLS + Math.floor(mm / 10);
@@ -84,8 +84,8 @@ function seedDemo(): DB {
     e.dday = variant % 2 ? 'D-20 포트폴리오 공개' : '';
     e.comment = ['한 번에 하나만. 시작만 하면 된다.', '어제보다 10분만 더.', '완벽보다 완료.'][variant % 3];
     e.tasks[0] = { tag: '작업', text: '포트폴리오 첫 화면 레이아웃', done: variant % 2 === 0, hl: 1 };
-    e.tasks[1] = { tag: '운동', text: '한강 달리기 3km', done: true, hl: 3 };
-    e.tasks[2] = { tag: '공부', text: '일본어 히라가나 か행', done: false, hl: 4 };
+    e.tasks[1] = { tag: '운동', text: run.title, done: true, hl: 3, goal: run.id };
+    e.tasks[2] = { tag: '공부', text: jp.title, done: false, hl: 4, goal: jp.id };
     if (variant % 3 === 0) e.tasks[3] = { tag: '집', text: '빨래 개기', done: false, hl: 0 };
     paint(e.cells, 3, 7, 0, 7, 40);
     paint(e.cells, 1, 9, 30, 11 + (variant % 2), 20);
@@ -97,6 +97,15 @@ function seedDemo(): DB {
   [today, today - 1, today - 2, today - 4, today - 7, today - 8].forEach((dd, i) => {
     if (dd >= 1) db.days[dayKey(y, m, dd)] = mk(i);
   });
+  // 루틴 기록이 쌓여 보이도록 지난 몇 주를 채운다
+  for (let back = 9; back <= 52; back++) {
+    const d0 = new Date(y, m - 1, today - back);
+    const k = dayKey(d0.getFullYear(), d0.getMonth() + 1, d0.getDate());
+    const e = emptyDay();
+    e.tasks[0] = { tag: '운동', text: run.title, done: back % 3 !== 1 && back < 40, hl: 3, goal: run.id };
+    if (back < 24) e.tasks[1] = { tag: '공부', text: jp.title, done: back % 2 === 0, hl: 4, goal: jp.id };
+    db.days[k] = e;
+  }
   return db;
 }
 
@@ -448,6 +457,55 @@ export function updateTask(key: string, index: number, patch: Partial<Task>) {
   const cur = db.days[key] ?? emptyDay();
   const tasks = cur.tasks.map((t, i) => (i === index ? { ...t, ...patch } : t));
   updateDay(key, { tasks });
+}
+
+export type RoutineStats = {
+  /** 처음 체크한 날 (없으면 null) */
+  first: string | null;
+  /** 가장 최근에 체크한 날 (없으면 null) */
+  last: string | null;
+  /** 오늘까지 체크한 날 수 */
+  count: number;
+  /** 체크한 날 */
+  done: Set<string>;
+  /** 할 일에 넣었지만 아직 체크하지 않은 날 */
+  planned: Set<string>;
+  /** 오늘(또는 어제)까지 이어진 연속 일수 */
+  streak: number;
+};
+
+/** 목표 루틴 하나가 일별 할 일에 채워져 체크된 기록을 모은다. 같은 날 여러 줄이어도 하루 한 번으로 센다 */
+export function routineStats(d: DB, goalId: string, today: string): RoutineStats {
+  const done = new Set<string>();
+  const planned = new Set<string>();
+  for (const k in d.days) {
+    if (k > today) continue;
+    let any = false;
+    let checked = false;
+    for (const t of d.days[k].tasks) {
+      if (t.goal !== goalId) continue;
+      any = true;
+      if (t.done) checked = true;
+    }
+    if (checked) done.add(k);
+    else if (any) planned.add(k);
+  }
+  let first: string | null = null;
+  let last: string | null = null;
+  for (const k of done) {
+    if (!first || k < first) first = k;
+    if (!last || k > last) last = k;
+  }
+  let streak = 0;
+  const c = new Date(+today.slice(0, 4), +today.slice(5, 7) - 1, +today.slice(8, 10));
+  const keyOf = (x: Date) => dayKey(x.getFullYear(), x.getMonth() + 1, x.getDate());
+  // 오늘 아직 안 했어도 어제까지 이어졌다면 연속으로 본다
+  if (!done.has(keyOf(c))) c.setDate(c.getDate() - 1);
+  while (done.has(keyOf(c))) {
+    streak++;
+    c.setDate(c.getDate() - 1);
+  }
+  return { first, last, count: done.size, done, planned, streak };
 }
 
 export function getYearPlan(d: DB, year: number): YearPlan | undefined {
