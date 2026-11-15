@@ -1,8 +1,8 @@
 import * as stylex from '@stylexjs/stylex';
-import { useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { atmosphere, atmosphereSnapshot, subscribeAtmosphere } from '../lib/atmosphere';
 import {
-  formatMinutes, getDay, PEN_COLORS, penRGB, updateDay, updateTask, useDB, type Task,
+  formatMinutes, getDay, getYearPlan, PEN_COLORS, penRGB, updateDay, updateTask, useDB, type Goal, type Task,
 } from '../lib/store';
 import { dayKey, pad2, useSlowNow, WEEKDAYS, WEEKDAYS_EN } from '../lib/time';
 import { color, dur, ease, radius, type } from '../tokens.stylex';
@@ -180,6 +180,7 @@ const s = stylex.create({
     '::placeholder': { color: color.inkFaint },
   },
   textDone: { color: color.inkSoft, textDecorationLine: 'line-through' },
+  textWithPick: { paddingRight: { default: 34, '@media (pointer: coarse)': 40 } },
   // 펜을 든 동안: 가로로 그으면 형광펜, 톡 누르면 그대로 글쓰기
   penLayer: { position: 'absolute', inset: 0, cursor: 'crosshair', touchAction: 'pan-y' },
   checkCell: {
@@ -192,6 +193,169 @@ const s = stylex.create({
   },
   memo: { display: 'flex', flexDirection: 'column', gap: 2 },
 });
+
+const pick = stylex.create({
+  // 할 일 칸 오른쪽의 작은 + 네모. 누르면 목표 루틴 목록이 열린다
+  wrap: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: 0,
+    zIndex: 2,
+    display: 'flex',
+    alignItems: 'center',
+    paddingRight: { default: 6, '@media (pointer: coarse)': 4 },
+  },
+  // 열린 메뉴가 아래 줄들의 + 버튼보다 위에 오도록
+  wrapOpen: { zIndex: 40 },
+  btn: {
+    width: { default: 20, '@media (pointer: coarse)': 30 },
+    height: { default: 20, '@media (pointer: coarse)': 30 },
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 5,
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: { default: color.line, ':hover': color.lineStrong },
+    color: color.inkSoft,
+    backgroundColor: { default: color.surface, ':hover': { default: null, '@media (hover: hover)': color.wash } },
+    opacity: { default: 0.75, ':hover': 1, ':focus-visible': 1 },
+    transitionProperty: 'background-color, border-color, color, opacity, transform',
+    transitionDuration: dur.tap,
+    transform: { default: 'none', ':active': 'scale(0.88)' },
+    outlineStyle: { default: 'none', ':focus-visible': 'solid' },
+    outlineWidth: 2,
+    outlineColor: color.ink,
+    outlineOffset: 1,
+  },
+  // 루틴과 이어진 줄: 네모가 채워진다
+  btnLinked: { backgroundColor: color.ink, borderColor: color.ink, color: color.inverse, opacity: 1 },
+  btnOpen: { borderColor: color.ink, color: color.ink, opacity: 1 },
+  menu: {
+    position: 'absolute',
+    right: 4,
+    zIndex: 30,
+    minWidth: 220,
+    maxWidth: 'min(300px, calc(100vw - 48px))',
+    padding: 6,
+    display: 'flex',
+    flexDirection: 'column',
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: color.line,
+    borderRadius: radius.control,
+    boxShadow: '0 18px 40px -18px rgb(0 0 0 / 0.45)',
+  },
+  below: { top: 'calc(100% - 2px)' },
+  above: { bottom: 'calc(100% - 2px)' },
+  head: { paddingInline: 10, paddingTop: 6, paddingBottom: 4 },
+  item: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: { default: 38, '@media (pointer: coarse)': 46 },
+    paddingInline: 10,
+    borderRadius: 7,
+    textAlign: 'left',
+    fontSize: type.body,
+    fontWeight: 600,
+    color: color.ink,
+    backgroundColor: { default: 'transparent', ':hover': { default: null, '@media (hover: hover)': color.wash }, ':focus-visible': color.wash },
+    outlineStyle: 'none',
+  },
+  itemOn: { backgroundColor: color.washStrong },
+  no: { fontSize: type.small, fontWeight: 300, color: color.inkSoft, fontVariantNumeric: 'tabular-nums', minWidth: 18 },
+  itemText: { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  unlink: { fontSize: type.small, color: color.inkSoft, fontWeight: 500 },
+  empty: { paddingInline: 10, paddingBlock: 10, fontSize: type.small, lineHeight: 1.5, color: color.inkSoft },
+});
+
+function RoutinePicker({
+  routines, task, index, onPatch,
+}: {
+  routines: Goal[];
+  task: Task;
+  index: number;
+  onPatch: (patch: Partial<Task>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const linked = routines.find((g) => g.id === task.goal);
+  useEffect(() => {
+    if (!open) return;
+    const down = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', down);
+    document.addEventListener('keydown', key);
+    return () => {
+      document.removeEventListener('pointerdown', down);
+      document.removeEventListener('keydown', key);
+    };
+  }, [open]);
+  const choose = (g: Goal) => {
+    onPatch({ text: g.title, goal: g.id });
+    setOpen(false);
+  };
+  return (
+    <div ref={ref} {...NO_SWIPE} {...stylex.props(pick.wrap, open && pick.wrapOpen)}>
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={linked ? `${index + 1}번째 줄, 목표 루틴 "${linked.title}"와 이어짐. 바꾸기` : `${index + 1}번째 줄에 목표 루틴 채우기`}
+        title={linked ? `목표 루틴: ${linked.title}` : '목표 루틴 채우기'}
+        onClick={() => setOpen((v) => !v)}
+        {...stylex.props(pick.btn, open && pick.btnOpen, !!linked && pick.btnLinked)}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+          <path d="M5 1.5v7M1.5 5h7" />
+        </svg>
+      </button>
+      {open && (
+        <div role="menu" aria-label="목표 루틴" {...stylex.props(pick.menu, index >= 7 ? pick.above : pick.below)}>
+          <span {...stylex.props(ui.label, pick.head)}>목표 루틴</span>
+          {routines.length === 0 ? (
+            <p {...stylex.props(pick.empty)}>아직 목표 루틴이 없습니다. 연도 화면에서 먼저 적어 주세요.</p>
+          ) : (
+            routines.map((g, i) => (
+              <button
+                key={g.id}
+                type="button"
+                role="menuitem"
+                onClick={() => choose(g)}
+                {...stylex.props(pick.item, g.id === task.goal && pick.itemOn)}
+              >
+                <span aria-hidden {...stylex.props(pick.no)}>
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <span {...stylex.props(pick.itemText)}>{g.title}</span>
+              </button>
+            ))
+          )}
+          {task.goal && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                onPatch({ goal: undefined });
+                setOpen(false);
+              }}
+              {...stylex.props(pick.item, pick.unlink)}
+            >
+              루틴 연결 끊기
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const tray = stylex.create({
   root: { display: 'flex', alignItems: 'flex-start', gap: 2 },
@@ -287,11 +451,12 @@ function PenTray({ tool, onTool, minutes }: { tool: number; onTool: (t: number) 
 }
 
 function TaskRow({
-  task, index, tool, onPatch,
+  task, index, tool, routines, onPatch,
 }: {
   task: Task;
   index: number;
   tool: number;
+  routines: Goal[];
   onPatch: (patch: Partial<Task>) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -333,10 +498,10 @@ function TaskRow({
         <input
           ref={inputRef}
           value={task.text}
-          placeholder={index === 0 ? '가장 중요한 한 가지' : undefined}
           aria-label={`${index + 1}번째 할 일${task.hl ? `, ${PEN_COLORS[task.hl - 1].name} 형광펜` : ''}`}
-          onChange={(e) => onPatch({ text: e.target.value })}
-          {...stylex.props(s.textInput, task.done && s.textDone)}
+          // 글을 다 지우면 루틴과의 연결도 함께 끊는다
+          onChange={(e) => onPatch(e.target.value.trim() ? { text: e.target.value } : { text: e.target.value, goal: undefined })}
+          {...stylex.props(s.textInput, s.textWithPick, task.done && s.textDone)}
         />
         {tool !== 0 && (
           <div
@@ -373,6 +538,7 @@ function TaskRow({
             }}
           />
         )}
+        <RoutinePicker routines={routines} task={task} index={index} onPatch={onPatch} />
       </div>
       <div {...stylex.props(s.checkCell)}>
         <Check checked={task.done} onChange={(v) => onPatch({ done: v })} label={`${index + 1}번째 할 일 완료`} />
@@ -396,6 +562,7 @@ export function Planner({ year, month, day, leaving, onBack, onStep }: Props) {
   useSyncExternalStore(subscribeAtmosphere, atmosphereSnapshot);
   const key = dayKey(year, month, day);
   const entry = getDay(db, key);
+  const routines = (getYearPlan(db, year)?.goals ?? []).filter((g) => g.title.trim());
   const [tool, setTool] = useState(0);
   const lastPen = useRef(1);
   const pickTool = (t: number) => {
@@ -481,7 +648,7 @@ export function Planner({ year, month, day, leaving, onBack, onStep }: Props) {
               </div>
               <div {...stylex.props(s.table)}>
                 {entry.tasks.map((t, i) => (
-                  <TaskRow key={i} task={t} index={i} tool={tool} onPatch={(patch) => updateTask(key, i, patch)} />
+                  <TaskRow key={i} task={t} index={i} tool={tool} routines={routines} onPatch={(patch) => updateTask(key, i, patch)} />
                 ))}
               </div>
             </div>
