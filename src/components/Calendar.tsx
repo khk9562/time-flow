@@ -104,6 +104,7 @@ const s = stylex.create({
     borderColor: color.ink,
     pointerEvents: 'none',
   },
+  mottoBottom: { marginTop: 14, marginBottom: -16 },
   marks: { position: 'absolute', bottom: 5, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 2, height: 4 },
   mark: { width: 9, height: 4, borderRadius: 2 },
   markInk: { backgroundColor: color.inkSoft },
@@ -113,6 +114,8 @@ const s = stylex.create({
 
 // 시안 비교용: ?memo=1..4 (고른 뒤에는 하나만 남긴다)
 const MOTTO_LOOK = (Math.min(4, Math.max(1, Number(new URLSearchParams(location.search).get('memo')) || 1)) as MottoLook);
+// 시안 비교용: ?pos=bottom 이면 달력 아래에 둔다
+const MOTTO_BOTTOM = new URLSearchParams(location.search).get('pos') === 'bottom';
 
 function usedPens(e: DayEntry): number[] {
   const set = new Set<number>();
@@ -170,7 +173,7 @@ export function Calendar({ year, month, leaving, onPick, onClose, onStep }: Prop
         <div {...stylex.props(s.bar)}>
           <FlowBar progress={() => monthProgress(year, month, now())} />
         </div>
-        <MonthMotto key={`${year}-${month}`} year={year} month={month} look={MOTTO_LOOK} />
+        {!MOTTO_BOTTOM && <MonthMotto key={`${year}-${month}`} year={year} month={month} look={MOTTO_LOOK} />}
 
         <div {...stylex.props(s.week)} aria-hidden>
           {WEEKDAYS_SHORT.map((w) => (
@@ -220,7 +223,13 @@ export function Calendar({ year, month, leaving, onPick, onClose, onStep }: Prop
             );
           })}
         </div>
-        <p {...stylex.props(s.hint)}>날짜를 고르면 그날의 플래너가 열립니다</p>
+        {MOTTO_BOTTOM ? (
+          <div {...stylex.props(s.mottoBottom)}>
+            <MonthMotto key={`${year}-${month}`} year={year} month={month} look={MOTTO_LOOK} />
+          </div>
+        ) : (
+          <p {...stylex.props(s.hint)}>날짜를 고르면 그날의 플래너가 열립니다</p>
+        )}
       </div>
     </div>
   );
