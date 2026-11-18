@@ -1,11 +1,11 @@
 import * as stylex from '@stylexjs/stylex';
-import { useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { atmosphere, atmosphereSnapshot, subscribeAtmosphere } from '../lib/atmosphere';
 import { dayHasContent, PEN_COLORS, useDB, type DayEntry } from '../lib/store';
 import { dayKey, daysInMonth, monthProgress, MONTHS_EN, now, useSlowNow, WEEKDAYS, WEEKDAYS_SHORT } from '../lib/time';
 import { color, dur, ease, radius, type } from '../tokens.stylex';
 import { FlowBar } from './FlowBar';
-import { MonthMotto, type MottoLook } from './MonthMotto';
+import { MonthMotto } from './MonthMotto';
 import { ui, useSwipe } from './ui';
 
 const riseIn = stylex.keyframes({
@@ -54,13 +54,17 @@ const s = stylex.create({
     animationDelay: '220ms',
     animationTimingFunction: ease.out,
     animationFillMode: 'both',
+    // 키보드가 올라오면 한 문장 칸이 보이도록 들어 올린다 (등장 애니메이션이 transform 을 쥐고 있어 translate 로)
+    transitionProperty: 'translate',
+    transitionDuration: '320ms',
+    transitionTimingFunction: ease.out,
   },
   head: { display: 'flex', alignItems: 'flex-end', gap: 16, marginBottom: 14 },
   num: { fontSize: 'clamp(72px, 15svh, 132px)', fontWeight: 200, lineHeight: 0.82, letterSpacing: '-0.04em', fontVariantNumeric: 'tabular-nums' },
   headText: { display: 'flex', flexDirection: 'column', gap: 4, paddingBottom: 4 },
   en: { fontSize: type.small, fontWeight: 700, letterSpacing: '0.22em' },
   yr: { fontSize: type.small, fontWeight: 500, color: color.inkSoft, letterSpacing: '0.1em' },
-  bar: { height: 8, marginBottom: 12 },
+  bar: { height: 8, marginBottom: 18 },
   week: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 4 },
   wd: { textAlign: 'center', fontSize: type.small, fontWeight: 600, color: color.inkSoft, paddingBlock: 6 },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', rowGap: 2 },
@@ -104,18 +108,11 @@ const s = stylex.create({
     borderColor: color.ink,
     pointerEvents: 'none',
   },
-  mottoBottom: { marginTop: 14, marginBottom: -16 },
+  motto: { marginTop: 14 },
   marks: { position: 'absolute', bottom: 5, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 2, height: 4 },
   mark: { width: 9, height: 4, borderRadius: 2 },
   markInk: { backgroundColor: color.inkSoft },
-  // 낮은 화면(여섯 주짜리 달)에서는 한 문장 칸에 자리를 내준다
-  hint: { display: { default: 'block', '@media (max-height: 700px)': 'none' }, marginTop: 18, fontSize: type.small, color: color.inkSoft, textAlign: 'center' },
 });
-
-// 시안 비교용: ?memo=1..4 (고른 뒤에는 하나만 남긴다)
-const MOTTO_LOOK = (Math.min(4, Math.max(1, Number(new URLSearchParams(location.search).get('memo')) || 1)) as MottoLook);
-// 시안 비교용: ?pos=bottom 이면 달력 아래에 둔다
-const MOTTO_BOTTOM = new URLSearchParams(location.search).get('pos') === 'bottom';
 
 function usedPens(e: DayEntry): number[] {
   const set = new Set<number>();
@@ -144,6 +141,35 @@ export function Calendar({ year, month, leaving, onPick, onClose, onStep }: Prop
   // 왼쪽으로 밀면 다음 달, 오른쪽으로 밀면 지난달, 왼쪽 끝에서 밀면 달력을 닫는다
   const swipe = useSwipe({ onNext: () => onStep(1), onPrev: () => onStep(-1), onBack: onClose });
 
+  // 한 문장 칸은 달력 맨 아래에 있어 화면 키보드에 가려진다. 쓰는 동안에는 가려진 만큼 달력을 들어 올린다
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const mottoRef = useRef<HTMLDivElement>(null);
+  const [lift, setLift] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    const body = bodyRef.current;
+    const motto = mottoRef.current;
+    const root = body?.offsetParent;
+    if (!vv || !body || !motto || !root) return;
+    const update = () => {
+      if (!motto.contains(document.activeElement)) return setLift(0);
+      // offsetTop 은 translate 를 빼고 잰 자리라, 옮기는 중에도 값이 흔들리지 않는다
+      let bottom = root.getBoundingClientRect().top + motto.offsetHeight;
+      for (let el: Element | null = motto; el instanceof HTMLElement && el !== root; el = el.offsetParent) bottom += el.offsetTop;
+      setLift(Math.max(0, Math.round(bottom + 12 - (vv.offsetTop + vv.height))));
+    };
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    motto.addEventListener('focusin', update);
+    motto.addEventListener('focusout', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+      motto.removeEventListener('focusin', update);
+      motto.removeEventListener('focusout', update);
+    };
+  }, []);
+
   return (
     <div {...stylex.props(s.root, leaving && s.leaving)} {...swipe}>
       <div {...stylex.props(s.top)}>
@@ -160,7 +186,7 @@ export function Calendar({ year, month, leaving, onPick, onClose, onStep }: Prop
         </div>
       </div>
 
-      <div {...stylex.props(s.body)}>
+      <div ref={bodyRef} {...stylex.props(s.body)} style={{ translate: `0 ${-lift}px` }}>
         <div {...stylex.props(s.head)}>
           <h2 key={month} {...stylex.props(s.num)} aria-label={`${year}년 ${month}월`}>
             {month}
@@ -173,7 +199,6 @@ export function Calendar({ year, month, leaving, onPick, onClose, onStep }: Prop
         <div {...stylex.props(s.bar)}>
           <FlowBar progress={() => monthProgress(year, month, now())} />
         </div>
-        {!MOTTO_BOTTOM && <MonthMotto key={`${year}-${month}`} year={year} month={month} look={MOTTO_LOOK} />}
 
         <div {...stylex.props(s.week)} aria-hidden>
           {WEEKDAYS_SHORT.map((w) => (
@@ -223,13 +248,9 @@ export function Calendar({ year, month, leaving, onPick, onClose, onStep }: Prop
             );
           })}
         </div>
-        {MOTTO_BOTTOM ? (
-          <div {...stylex.props(s.mottoBottom)}>
-            <MonthMotto key={`${year}-${month}`} year={year} month={month} look={MOTTO_LOOK} />
-          </div>
-        ) : (
-          <p {...stylex.props(s.hint)}>날짜를 고르면 그날의 플래너가 열립니다</p>
-        )}
+        <div ref={mottoRef} {...stylex.props(s.motto)}>
+          <MonthMotto key={`${year}-${month}`} year={year} month={month} />
+        </div>
       </div>
     </div>
   );
