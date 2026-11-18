@@ -5,6 +5,7 @@ import { dayHasContent, PEN_COLORS, useDB, type DayEntry } from '../lib/store';
 import { dayKey, daysInMonth, monthProgress, MONTHS_EN, now, useSlowNow, WEEKDAYS, WEEKDAYS_SHORT } from '../lib/time';
 import { color, dur, ease, radius, type } from '../tokens.stylex';
 import { FlowBar } from './FlowBar';
+import { MonthMotto, type MottoLook } from './MonthMotto';
 import { ui, useSwipe } from './ui';
 
 const riseIn = stylex.keyframes({
@@ -59,7 +60,7 @@ const s = stylex.create({
   headText: { display: 'flex', flexDirection: 'column', gap: 4, paddingBottom: 4 },
   en: { fontSize: type.small, fontWeight: 700, letterSpacing: '0.22em' },
   yr: { fontSize: type.small, fontWeight: 500, color: color.inkSoft, letterSpacing: '0.1em' },
-  bar: { height: 8, marginBottom: 18 },
+  bar: { height: 8, marginBottom: 12 },
   week: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 4 },
   wd: { textAlign: 'center', fontSize: type.small, fontWeight: 600, color: color.inkSoft, paddingBlock: 6 },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', rowGap: 2 },
@@ -106,8 +107,12 @@ const s = stylex.create({
   marks: { position: 'absolute', bottom: 5, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 2, height: 4 },
   mark: { width: 9, height: 4, borderRadius: 2 },
   markInk: { backgroundColor: color.inkSoft },
-  hint: { marginTop: 18, fontSize: type.small, color: color.inkSoft, textAlign: 'center' },
+  // 낮은 화면(여섯 주짜리 달)에서는 한 문장 칸에 자리를 내준다
+  hint: { display: { default: 'block', '@media (max-height: 700px)': 'none' }, marginTop: 18, fontSize: type.small, color: color.inkSoft, textAlign: 'center' },
 });
+
+// 시안 비교용: ?memo=1..4 (고른 뒤에는 하나만 남긴다)
+const MOTTO_LOOK = (Math.min(4, Math.max(1, Number(new URLSearchParams(location.search).get('memo')) || 1)) as MottoLook);
 
 function usedPens(e: DayEntry): number[] {
   const set = new Set<number>();
@@ -165,6 +170,7 @@ export function Calendar({ year, month, leaving, onPick, onClose, onStep }: Prop
         <div {...stylex.props(s.bar)}>
           <FlowBar progress={() => monthProgress(year, month, now())} />
         </div>
+        <MonthMotto key={`${year}-${month}`} year={year} month={month} look={MOTTO_LOOK} />
 
         <div {...stylex.props(s.week)} aria-hidden>
           {WEEKDAYS_SHORT.map((w) => (

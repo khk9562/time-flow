@@ -20,7 +20,8 @@ export type DayEntry = {
 };
 // step·months 는 예전 기록과의 호환을 위해 남겨 둔 칸 (화면에서는 더 쓰지 않는다)
 export type Goal = { id: string; title: string; step: string; months: boolean[]; done: boolean };
-export type YearPlan = { motto: string; goals: Goal[] };
+/** months: 달마다 적는 한 문장 (키는 1..12). 서버 항목 종류를 늘리지 않으려고 그 해 계획 안에 둔다 */
+export type YearPlan = { motto: string; goals: Goal[]; months?: Record<string, string> };
 type DB = { v: 1; years: Record<string, YearPlan>; days: Record<string, DayEntry> };
 
 export const emptyTask = (): Task => ({ tag: '', text: '', done: false, hl: 0 });
@@ -50,7 +51,8 @@ export const dayHasContent = (d: DayEntry | undefined) =>
     d.tasks.some((t) => t.tag.trim() || t.text.trim() || t.done || t.hl > 0));
 
 export const yearPlanHasContent = (p: YearPlan | undefined) =>
-  !!p && (!!p.motto.trim() || p.goals.some((g) => g.title.trim() || g.step.trim()));
+  !!p &&
+  (!!p.motto.trim() || p.goals.some((g) => g.title.trim() || g.step.trim()) || Object.values(p.months ?? {}).some((m) => m.trim()));
 
 const demo = new URLSearchParams(location.search).has('demo');
 const GUEST_KEY = demo ? 'heureum:demo' : 'heureum:v1';
@@ -73,6 +75,7 @@ function seedDemo(): DB {
   const jp = { ...newGoal(), id: 'demo-jp', title: '일본어 히라가나 한 행' };
   db.years[y] = {
     motto: '작게 시작해서 매일 닿기',
+    months: { [m]: '서두르지 않기.\n대신 하루도 거르지 않기.' },
     goals: [{ ...newGoal(), id: 'demo-folio', title: '포트폴리오 첫 화면 작업' }, run, jp],
   };
   const paint = (cells: number[], color: number, fromHour: number, fromMin: number, toHour: number, toMin: number) => {
@@ -517,6 +520,16 @@ export function updateYearPlan(year: number, plan: YearPlan) {
   if (yearPlanHasContent(plan) || plan.goals.length > 1) years[year] = plan;
   else delete years[year];
   commit({ ...db, years }, `year:${year}`);
+}
+
+export const getMonthMotto = (d: DB, year: number, month: number) => d.years[year]?.months?.[month] ?? '';
+
+export function updateMonthMotto(year: number, month: number, text: string) {
+  const plan = db.years[year] ?? emptyYear();
+  const months = { ...plan.months };
+  if (text.trim()) months[month] = text;
+  else delete months[month];
+  updateYearPlan(year, { ...plan, months });
 }
 
 /** 그 해에 계획이나 일별 기록이 하나라도 있는지 */
