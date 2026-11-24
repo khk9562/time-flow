@@ -4,9 +4,9 @@ import { atmosphere, atmosphereSnapshot, subscribeAtmosphere } from '../lib/atmo
 import {
   formatMinutes, getDay, getYearPlan, PEN_COLORS, penRGB, updateDay, updateTask, useDB, type Goal, type Task,
 } from '../lib/store';
-import { upcomingEvents } from '../lib/events';
 import { dayKey, pad2, parseDayKey, useSlowNow, WEEKDAYS, WEEKDAYS_EN } from '../lib/time';
 import { color, dur, ease, radius, type } from '../tokens.stylex';
+import { appendDdayLine, ddayLine, hasDdayLine, upcomingEvents } from '../services/events';
 import { Sheet, sheetItem } from './Sheet';
 import { Timeline } from './Timeline';
 import { AutoTextarea, Check, NO_SWIPE, ui, useKeepFocusVisible, useKeyboardInset, useSwipe } from './ui';
@@ -276,7 +276,7 @@ const pick = stylex.create({
     color: color.inverse,
   },
   unlink: { alignSelf: 'flex-start', marginTop: 8, marginLeft: -4, fontSize: type.small, color: color.inkSoft },
-  empty: { paddingInline: 4, paddingBlock: 10, fontSize: type.body, lineHeight: 1.6, color: color.inkSoft },
+  empty: { paddingInline: 4, paddingBlock: 10, fontSize: type.body, lineHeight: 1.6, color: color.inkSoft, wordBreak: 'keep-all', overflowWrap: 'break-word' },
 });
 
 function RoutinePicker({
@@ -382,11 +382,11 @@ const dayText = (key: string) => {
 function DdayPicker({ dateKey, value, onChange }: { dateKey: string; value: string; onChange: (v: string) => void }) {
   const db = useDB();
   const [open, setOpen] = useState(false);
-  const events = open ? upcomingEvents(db.days, dateKey) : [];
-  const lines = value.split('\n').map((l) => l.trim());
+  // 시트가 닫히며 내려가는 동안에도 목록이 그대로 보이도록 열림과 상관없이 계산한다
+  const events = upcomingEvents(db.days, dateKey);
   const choose = (line: string) => {
-    // 이미 적힌 일정은 다시 적지 않는다
-    if (!lines.includes(line)) onChange(value.trim() ? `${value.trimEnd()}\n${line}` : line);
+    const next = appendDdayLine(value, line);
+    if (next !== value) onChange(next);
     setOpen(false);
   };
   return (
@@ -410,8 +410,8 @@ function DdayPicker({ dateKey, value, onChange }: { dateKey: string; value: stri
         ) : (
           <div {...stylex.props(pick.list)}>
             {events.map((ev, i) => {
-              const line = `${ev.label} ${ev.title}`;
-              const on = lines.includes(line);
+              const line = ddayLine(ev);
+              const on = hasDdayLine(value, line);
               return (
                 <button
                   key={`${ev.date}:${ev.id}`}

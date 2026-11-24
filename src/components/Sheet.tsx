@@ -2,7 +2,7 @@ import * as stylex from '@stylexjs/stylex';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { color, ease, type } from '../tokens.stylex';
-import { NO_SWIPE, ui, useKeyboardInset, usePresence } from './ui';
+import { NO_SWIPE, ui, useKeyboardInset, useMedia, usePresence } from './ui';
 
 /*
  * 바텀시트 / 드로어.
@@ -135,6 +135,7 @@ export function Sheet({ open, onClose, title, subtitle, children }: Props) {
   close.current = onClose;
   // 시트 안에서 글을 쓸 때 화면 키보드가 시트를 가리지 않게 한다
   const keyboard = useKeyboardInset(open);
+  const phone = useMedia('(max-width: 560px)');
 
   useEffect(() => {
     if (!open) return;
@@ -212,7 +213,8 @@ export function Sheet({ open, onClose, title, subtitle, children }: Props) {
         {...stylex.props(s.panel, leaving && s.panelOut, settling && s.settle)}
         style={{
           translate: `0 ${dy}px`,
-          ...(keyboard ? { bottom: keyboard, maxHeight: `calc(100dvh - 48px - ${keyboard}px)` } : null),
+          // 휴대폰 바텀시트만 키보드 위로 올린다 (드로어는 화면 높이를 다 쓰므로 그대로 둔다)
+          ...(keyboard && phone ? { bottom: keyboard, maxHeight: `calc(100dvh - 48px - env(safe-area-inset-top) - ${keyboard}px)` } : null),
         }}
       >
         <div aria-hidden {...stylex.props(s.grip)} {...dragHandlers} />

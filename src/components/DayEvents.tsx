@@ -1,5 +1,5 @@
 import * as stylex from '@stylexjs/stylex';
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { addEvent, getDay, removeEvent, updateEvent, useDB } from '../lib/store';
 import { parseDayKey, WEEKDAYS } from '../lib/time';
 import { color, dur, ease, radius, type } from '../tokens.stylex';
@@ -97,7 +97,7 @@ const s = stylex.create({
   more: { alignSelf: 'flex-start', marginLeft: -10, fontSize: type.small, color: color.inkSoft },
   chevron: { transitionProperty: 'rotate', transitionDuration: dur.quick, transitionTimingFunction: ease.out },
   chevronOpen: { rotate: '180deg' },
-  empty: { marginTop: 12, paddingInline: 4, fontSize: type.small, color: color.inkSoft },
+  empty: { marginTop: 12, paddingInline: 4, fontSize: type.small, color: color.inkSoft, wordBreak: 'keep-all', overflowWrap: 'break-word' },
   form: { display: 'flex', flexDirection: 'column', gap: 14, paddingInline: 10, paddingTop: 4 },
   input: {
     width: '100%',
@@ -130,10 +130,11 @@ export function DayEvents({ dateKey, onOpenPlanner }: Props) {
   const date = parseDayKey(dateKey);
   const dayText = `${date.getMonth() + 1}월 ${date.getDate()}일 ${WEEKDAYS[date.getDay()]}`;
 
-  // 펼침은 날짜마다 따로: 다른 날을 고르면 다시 접힌 채로 시작한다
-  const [openFor, setOpenFor] = useState<string | null>(null);
+  // 펼침은 날짜마다 따로: 달력이 날짜를 key 로 이 컴포넌트를 새로 그려, 다른 날을 고르면 접힌 채로 시작한다
+  const [more, setMore] = useState(false);
   const rest = events.slice(SHOWN);
-  const expanded = openFor === dateKey && rest.length > 0;
+  const expanded = more && rest.length > 0;
+  const addRef = useRef<HTMLButtonElement>(null);
 
   // 시트가 닫히는 동안에도 내용이 바뀌지 않도록 열림과 대상(고칠 일정의 id, 새 일정이면 null)을 따로 둔다
   const [sheet, setSheet] = useState(false);
@@ -147,7 +148,8 @@ export function DayEvents({ dateKey, onOpenPlanner }: Props) {
   const title = draft.trim();
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!title) return;
+    // 닫히며 내려가는 동안 한 번 더 눌러도 같은 일정이 두 번 생기지 않게
+    if (!sheet || !title) return;
     if (target) updateEvent(dateKey, target, title);
     else addEvent(dateKey, title);
     setSheet(false);
@@ -172,6 +174,7 @@ export function DayEvents({ dateKey, onOpenPlanner }: Props) {
     <section aria-label={`${dayText} 일정`} {...stylex.props(s.root)}>
       <div {...stylex.props(s.actions)}>
         <button
+          ref={addRef}
           type="button"
           aria-haspopup="dialog"
           aria-expanded={sheet && !target}
@@ -203,7 +206,7 @@ export function DayEvents({ dateKey, onOpenPlanner }: Props) {
               <button
                 type="button"
                 aria-expanded={expanded}
-                onClick={() => setOpenFor(expanded ? null : dateKey)}
+                onClick={() => setMore(!expanded)}
                 {...stylex.props(ui.textButton, s.more)}
               >
                 {expanded ? '접기' : `더보기 ${rest.length}건`}
@@ -235,8 +238,11 @@ export function DayEvents({ dateKey, onOpenPlanner }: Props) {
             <button
               type="button"
               onClick={() => {
+                if (!sheet) return;
                 removeEvent(dateKey, target);
                 setSheet(false);
+                // 시트를 연 일정 쪽지가 사라졌으니, 시트가 초점을 돌려준 뒤 일정 추가 버튼으로 옮긴다
+                window.setTimeout(() => addRef.current?.focus({ preventScroll: true }), 0);
               }}
               {...stylex.props(ui.textButton, s.remove)}
             >

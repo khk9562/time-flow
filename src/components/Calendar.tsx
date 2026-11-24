@@ -177,22 +177,31 @@ export function Calendar({ year, month, leaving, selected, onSelect, onPick, onC
   // 일정 영역이 화면 아래로 넘치면 보이는 곳까지 올린다. 두 번 누르기가 끝난 뒤에 움직여야 칸이 달아나지 않는다
   useEffect(() => {
     if (!picked) return;
-    const id = window.setTimeout(() => eventsRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), DOUBLE_MS + 40);
+    // scrollIntoView 는 패널이 열리는 중에 바깥 패널까지 옆으로 밀 수 있어, 달력 본문만 직접 내린다
+    const id = window.setTimeout(() => {
+      const body = bodyRef.current;
+      const box = eventsRef.current;
+      if (!body || !box) return;
+      const over = box.getBoundingClientRect().bottom - body.getBoundingClientRect().bottom;
+      if (over > 0) body.scrollBy({ top: over + 8, behavior: 'smooth' });
+    }, DOUBLE_MS + 40);
     return () => clearTimeout(id);
   }, [picked]);
 
   // 한 번 누르면 고르고, 같은 날을 빠르게 두 번 누르면 플래너로 간다
-  const lastTap = useRef<null | { d: number; t: number }>(null);
+  // 달을 넘긴 직후 같은 숫자의 날을 누른 것은 두 번 누르기가 아니므로, 날짜 전체(key)로 비교한다
+  const lastTap = useRef<null | { key: string; t: number }>(null);
   const hold = useRef(0);
   const tap = (d: number) => {
     const t = performance.now();
+    const key = dayKey(year, month, d);
     const last = lastTap.current;
-    if (last && last.d === d && t - last.t < DOUBLE_MS) {
+    if (last && last.key === key && t - last.t < DOUBLE_MS) {
       lastTap.current = null;
       onPick(d);
       return;
     }
-    lastTap.current = { d, t };
+    lastTap.current = { key, t };
     // 일정이 적은 날로 바꾸면 내용이 줄어 스크롤이 당겨지고 날짜 칸이 내려앉는다.
     // 두 번째 누름이 같은 칸에 떨어지도록, 판정이 끝날 때까지 일정 영역의 높이를 잡아 둔다
     const box = eventsRef.current;
@@ -203,7 +212,7 @@ export function Calendar({ year, month, leaving, selected, onSelect, onPick, onC
         box.style.minHeight = '';
       }, DOUBLE_MS);
     }
-    onSelect(dayKey(year, month, d));
+    onSelect(key);
   };
   useEffect(() => () => clearTimeout(hold.current), []);
 
@@ -295,7 +304,7 @@ export function Calendar({ year, month, leaving, selected, onSelect, onPick, onC
         </div>
         {picked && (
           <div ref={eventsRef}>
-            <DayEvents dateKey={picked} onOpenPlanner={() => onPick(+picked.slice(8))} />
+            <DayEvents key={picked} dateKey={picked} onOpenPlanner={() => onPick(+picked.slice(8))} />
           </div>
         )}
       </div>
