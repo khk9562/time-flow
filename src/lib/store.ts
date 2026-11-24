@@ -10,6 +10,8 @@ export const FIRST_HOUR = 6;
 
 /** goal: 목표 루틴에서 채워 넣은 할 일이면 그 루틴의 id */
 export type Task = { tag: string; text: string; done: boolean; hl: number; goal?: string };
+/** 그날의 일정 (시각 없이 제목만) */
+export type DayEvent = { id: string; title: string };
 export type DayEntry = {
   dday: string;
   comment: string;
@@ -17,6 +19,8 @@ export type DayEntry = {
   tasks: Task[];
   cells: number[]; // 0 = 비어 있음, 1..5 = 형광펜 색
   memo: string;
+  /** 예전 기록에는 없는 칸이라 읽을 때 ?? [] 로 받는다 */
+  events?: DayEvent[];
 };
 // step·months 는 예전 기록과의 호환을 위해 남겨 둔 칸 (화면에서는 더 쓰지 않는다)
 export type Goal = { id: string; title: string; step: string; months: boolean[]; done: boolean };
@@ -33,8 +37,9 @@ export const emptyDay = (): DayEntry => ({
   cells: new Array(TIME_ROWS * TIME_COLS).fill(0),
   memo: '',
 });
+const newId = () => Math.random().toString(36).slice(2, 9);
 export const newGoal = (): Goal => ({
-  id: Math.random().toString(36).slice(2, 9),
+  id: newId(),
   title: '',
   step: '',
   months: new Array(12).fill(false),
@@ -48,6 +53,7 @@ export const dayHasContent = (d: DayEntry | undefined) =>
   !!d &&
   (!!d.dday.trim() || !!d.comment.trim() || !!d.total.trim() || !!d.memo.trim() ||
     d.cells.some((c) => c > 0) ||
+    !!d.events?.length ||
     d.tasks.some((t) => t.tag.trim() || t.text.trim() || t.done || t.hl > 0));
 
 export const yearPlanHasContent = (p: YearPlan | undefined) =>
@@ -100,6 +106,16 @@ function seedDemo(): DB {
   [today, today - 1, today - 2, today - 4, today - 7, today - 8].forEach((dd, i) => {
     if (dd >= 1) db.days[dayKey(y, m, dd)] = mk(i);
   });
+  // 일정: 오늘은 더보기가 생기도록 다섯 건, 뒤로는 디데이를 고를 수 있게 몇 건
+  const plan = (after: number, titles: string[]) => {
+    const d0 = new Date(y, m - 1, today + after);
+    const k = dayKey(d0.getFullYear(), d0.getMonth() + 1, d0.getDate());
+    db.days[k] = { ...(db.days[k] ?? emptyDay()), events: titles.map((title, i) => ({ id: `demo-${after}-${i}`, title })) };
+  };
+  plan(0, ['포트폴리오 리뷰', '점심 약속: 성수동', '도서관 책 반납', '저녁 한강 달리기 모임, 반포 나들목 앞에서 7시 반에 만나기', '부모님께 전화']);
+  plan(3, ['치과 정기 검진']);
+  plan(20, ['포트폴리오 공개']);
+  plan(37, ['연말 회고 모임']);
   // 루틴 기록이 쌓여 보이도록 지난 몇 주를 채운다
   for (let back = 9; back <= 52; back++) {
     const d0 = new Date(y, m - 1, today - back);
@@ -460,6 +476,21 @@ export function updateTask(key: string, index: number, patch: Partial<Task>) {
   const cur = db.days[key] ?? emptyDay();
   const tasks = cur.tasks.map((t, i) => (i === index ? { ...t, ...patch } : t));
   updateDay(key, { tasks });
+}
+
+export function addEvent(key: string, title: string) {
+  const events = db.days[key]?.events ?? [];
+  updateDay(key, { events: [...events, { id: newId(), title }] });
+}
+
+export function updateEvent(key: string, id: string, title: string) {
+  const events = db.days[key]?.events ?? [];
+  updateDay(key, { events: events.map((e) => (e.id === id ? { ...e, title } : e)) });
+}
+
+export function removeEvent(key: string, id: string) {
+  const events = db.days[key]?.events ?? [];
+  updateDay(key, { events: events.filter((e) => e.id !== id) });
 }
 
 export type RoutineStats = {

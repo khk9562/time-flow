@@ -11,7 +11,7 @@ import { useLast, usePresence } from './components/ui';
 import { YearPage } from './components/YearPage';
 import { useDB, yearHasData } from './lib/store';
 import { isAuthHash } from './lib/supabase';
-import { daysInMonth, now, useSlowNow } from './lib/time';
+import { dayKey, daysInMonth, now, useSlowNow } from './lib/time';
 import { color, dur, ease } from './tokens.stylex';
 
 const IDLE_MS = 45000;
@@ -148,6 +148,11 @@ export function App() {
   }));
   const [monthCursor, setMonthCursor] = useState(() => view.month ?? now().getMonth() + 1);
   const [origin, setOrigin] = useState<{ x: number; y: number } | null>(null);
+  // 달력에서 고른 날. 플래너를 보고 돌아와도(버튼·Esc·뒤로 가기 어느 길이든) 보던 날이 골라져 있다
+  const [selKey, setSelKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (view.month !== null && view.day !== null) setSelKey(dayKey(view.year, view.month, view.day));
+  }, [view.year, view.month, view.day]);
   const activity = useRef(Date.now());
 
   // 올해와 내년은 언제나 쓸 수 있고, 지난 해는 기록이 있을 때만 열린다.
@@ -290,6 +295,8 @@ export function App() {
               year={view.year}
               month={shownMonth}
               leaving={cal.leaving && panelOpen}
+              selected={selKey}
+              onSelect={setSelKey}
               onPick={(day) => setView((v) => ({ ...v, day }))}
               onClose={() => setView((v) => ({ ...v, month: null, day: null }))}
               onStep={stepMonth}

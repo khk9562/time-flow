@@ -3,49 +3,35 @@ import { useState } from 'react';
 import { getMonthMotto, updateMonthMotto, useDB } from '../lib/store';
 import { color, dur, ease, radius } from '../tokens.stylex';
 
-const LINE = 28;
+const LINE = 25;
 
 const s = stylex.create({
-  // 옅은 잉크가 깔린 쪽지. 왼쪽에만 진한 선이 그어져 있다
+  // 큰 숫자 바로 아래에 놓이는 그 달의 제목. 테두리도 바탕도 없고, 쓰는 동안에만 옅은 잉크가 깔린다
   wrap: {
-    position: 'relative',
-    overflow: 'hidden',
-    paddingBlock: 8,
-    paddingLeft: 17,
-    paddingRight: 14,
-    borderRadius: `0 ${radius.control} ${radius.control} 0`,
-    backgroundColor: color.wash,
+    marginInline: -4,
+    paddingBlock: 4,
+    paddingInline: 10,
+    borderRadius: radius.control,
+    backgroundColor: 'transparent',
     transitionProperty: 'background-color',
     transitionDuration: dur.quick,
     transitionTimingFunction: ease.out,
   },
-  wrapOn: { backgroundColor: color.washStrong },
-  rod: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 3,
-    backgroundColor: color.lineStrong,
-    transformOrigin: 'left',
-    transitionProperty: 'background-color, transform',
-    transitionDuration: dur.quick,
-    transitionTimingFunction: ease.out,
-  },
-  rodOn: { backgroundColor: color.ink, transform: 'scaleX(1.5)' },
+  wrapOn: { backgroundColor: color.wash },
   field: {
     display: 'block',
     width: '100%',
     height: LINE * 2,
-    fontSize: 16,
-    fontWeight: 500,
+    fontSize: 18,
+    fontWeight: 700,
+    letterSpacing: '-0.01em',
     lineHeight: `${LINE}px`,
     overflow: 'hidden',
     '::placeholder': { color: color.inkFaint },
   },
 });
 
-/** 달력 아래에 적는 이달의 한 문장 (두 줄) */
+/** 달력 위쪽, 큰 숫자 아래에 적는 이달의 한 문장 (두 줄) */
 export function MonthMotto({ year, month }: { year: number; month: number }) {
   const db = useDB();
   const [on, setOn] = useState(false);
@@ -53,7 +39,6 @@ export function MonthMotto({ year, month }: { year: number; month: number }) {
 
   return (
     <div {...stylex.props(s.wrap, on && s.wrapOn)}>
-      <span aria-hidden {...stylex.props(s.rod, on && s.rodOn)} />
       <textarea
         rows={2}
         value={value}

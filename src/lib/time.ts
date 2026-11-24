@@ -62,4 +62,6 @@ export const MONTHS_EN = [
 
 export const pad2 = (n: number) => String(n).padStart(2, '0');
 export const dayKey = (y: number, m: number, d: number) => `${y}-${pad2(m)}-${pad2(d)}`;
+/** 'YYYY-MM-DD' 를 그날 0시의 Date 로 */
+export const parseDayKey = (k: string) => new Date(+k.slice(0, 4), +k.slice(5, 7) - 1, +k.slice(8, 10));
 export const daysInMonth = (y: number, m: number) => new Date(y, m, 0).getDate();

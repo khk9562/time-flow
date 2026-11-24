@@ -1,9 +1,10 @@
 import * as stylex from '@stylexjs/stylex';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { atmosphere, atmosphereSnapshot, subscribeAtmosphere } from '../lib/atmosphere';
 import { dayHasContent, PEN_COLORS, useDB, type DayEntry } from '../lib/store';
 import { dayKey, daysInMonth, monthProgress, MONTHS_EN, now, useSlowNow, WEEKDAYS, WEEKDAYS_SHORT } from '../lib/time';
 import { color, dur, ease, radius, type } from '../tokens.stylex';
+import { DayEvents } from './DayEvents';
 import { FlowBar } from './FlowBar';
 import { MonthMotto } from './MonthMotto';
 import { ui, useSwipe } from './ui';
@@ -16,6 +17,9 @@ const slideIn = stylex.keyframes({
   from: { opacity: 0, transform: 'translateX(40px)' },
   to: { opacity: 1, transform: 'translateX(0)' },
 });
+
+/** 같은 날을 이 시간 안에 두 번 누르면 플래너를 연다 */
+const DOUBLE_MS = 400;
 
 const s = stylex.create({
   root: {
@@ -46,20 +50,20 @@ const s = stylex.create({
     width: '100%',
     maxWidth: 600,
     marginInline: 'auto',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
+    // 일정이 늘어나면 아래로 스크롤된다
+    overflowX: 'hidden',
+    overflowY: 'auto',
+    overscrollBehavior: 'contain',
+    scrollbarWidth: 'none',
+    paddingBottom: 8,
     animationName: slideIn,
     animationDuration: '700ms',
     animationDelay: '220ms',
     animationTimingFunction: ease.out,
     animationFillMode: 'both',
-    // 키보드가 올라오면 한 문장 칸이 보이도록 들어 올린다 (등장 애니메이션이 transform 을 쥐고 있어 translate 로)
-    transitionProperty: 'translate',
-    transitionDuration: '320ms',
-    transitionTimingFunction: ease.out,
   },
-  head: { display: 'flex', alignItems: 'flex-end', gap: 16, marginBottom: 14 },
+  // 큰 숫자의 윗부분이 스크롤 영역에 잘리지 않게 위를 조금 비운다
+  head: { display: 'flex', alignItems: 'flex-end', gap: 16, paddingTop: 10, marginBottom: 24 },
   num: { fontSize: 'clamp(72px, 15svh, 132px)', fontWeight: 200, lineHeight: 0.82, letterSpacing: '-0.04em', fontVariantNumeric: 'tabular-nums' },
   headText: { display: 'flex', flexDirection: 'column', gap: 4, paddingBottom: 4 },
   en: { fontSize: type.small, fontWeight: 700, letterSpacing: '0.22em' },
@@ -95,6 +99,7 @@ const s = stylex.create({
   },
   past: { color: color.inkSoft },
   today: { fontWeight: 900 },
+  picked: { backgroundColor: color.washStrong, fontWeight: 800, color: color.ink },
   ringWrap: {
     position: 'absolute',
     top: '50%',
@@ -108,7 +113,7 @@ const s = stylex.create({
     borderColor: color.ink,
     pointerEvents: 'none',
   },
-  motto: { marginTop: 14 },
+  motto: { marginBottom: 14 },
   marks: { position: 'absolute', bottom: 5, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 2, height: 4 },
   mark: { width: 9, height: 4, borderRadius: 2 },
   markInk: { backgroundColor: color.inkSoft },
@@ -125,12 +130,16 @@ type Props = {
   year: number;
   month: number;
   leaving: boolean;
+  /** 고른 날 ('YYYY-MM-DD'). 이 달이 아니면 고르지 않은 것으로 본다 */
+  selected: string | null;
+  onSelect: (key: string) => void;
+  /** 플래너 열기 */
   onPick: (day: number) => void;
   onClose: () => void;
   onStep: (delta: number) => void;
 };
 
-export function Calendar({ year, month, leaving, onPick, onClose, onStep }: Props) {
+export function Calendar({ year, month, leaving, selected, onSelect, onPick, onClose, onStep }: Props) {
   const db = useDB();
   const today = useSlowNow();
   useSyncExternalStore(subscribeAtmosphere, atmosphereSnapshot);
@@ -141,34 +150,71 @@ export function Calendar({ year, month, leaving, onPick, onClose, onStep }: Prop
   // 왼쪽으로 밀면 다음 달, 오른쪽으로 밀면 지난달, 왼쪽 끝에서 밀면 달력을 닫는다
   const swipe = useSwipe({ onNext: () => onStep(1), onPrev: () => onStep(-1), onBack: onClose });
 
-  // 한 문장 칸은 달력 맨 아래에 있어 화면 키보드에 가려진다. 쓰는 동안에는 가려진 만큼 달력을 들어 올린다
+  // 달력은 가운데에 놓되, 일정 영역이 나타나도 날짜 칸이 움직이지 않도록 위쪽 여백을 직접 잰다
+  // (CSS 가운데 정렬은 내용이 늘면 전체가 다시 자리를 잡아, 두 번 누르는 사이에 칸이 달아난다)
   const bodyRef = useRef<HTMLDivElement>(null);
-  const mottoRef = useRef<HTMLDivElement>(null);
-  const [lift, setLift] = useState(0);
-  useEffect(() => {
-    const vv = window.visualViewport;
+  const baseRef = useRef<HTMLDivElement>(null);
+  const eventsRef = useRef<HTMLDivElement>(null);
+  const [pad, setPad] = useState(0);
+  useLayoutEffect(() => {
     const body = bodyRef.current;
-    const motto = mottoRef.current;
-    const root = body?.offsetParent;
-    if (!vv || !body || !motto || !root) return;
-    const update = () => {
-      if (!motto.contains(document.activeElement)) return setLift(0);
-      // offsetTop 은 translate 를 빼고 잰 자리라, 옮기는 중에도 값이 흔들리지 않는다
-      let bottom = root.getBoundingClientRect().top + motto.offsetHeight;
-      for (let el: Element | null = motto; el instanceof HTMLElement && el !== root; el = el.offsetParent) bottom += el.offsetTop;
-      setLift(Math.max(0, Math.round(bottom + 12 - (vv.offsetTop + vv.height))));
-    };
-    vv.addEventListener('resize', update);
-    vv.addEventListener('scroll', update);
-    motto.addEventListener('focusin', update);
-    motto.addEventListener('focusout', update);
-    return () => {
-      vv.removeEventListener('resize', update);
-      vv.removeEventListener('scroll', update);
-      motto.removeEventListener('focusin', update);
-      motto.removeEventListener('focusout', update);
-    };
+    const base = baseRef.current;
+    if (!body || !base) return;
+    const fit = () => setPad(Math.max(0, Math.floor((body.clientHeight - base.offsetHeight) / 2)));
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(body);
+    ro.observe(base);
+    return () => ro.disconnect();
   }, []);
+
+  // 고른 날이 이 달에 있을 때만 일정 영역을 보여 준다
+  const picked = selected?.startsWith(dayKey(year, month, 1).slice(0, 8)) ? selected : null;
+  // 달이 바뀌면 처음 자리로
+  useEffect(() => {
+    bodyRef.current?.scrollTo({ top: 0 });
+  }, [year, month]);
+  // 일정 영역이 화면 아래로 넘치면 보이는 곳까지 올린다. 두 번 누르기가 끝난 뒤에 움직여야 칸이 달아나지 않는다
+  useEffect(() => {
+    if (!picked) return;
+    // scrollIntoView 는 패널이 열리는 중에 바깥 패널까지 옆으로 밀 수 있어, 달력 본문만 직접 내린다
+    const id = window.setTimeout(() => {
+      const body = bodyRef.current;
+      const box = eventsRef.current;
+      if (!body || !box) return;
+      const over = box.getBoundingClientRect().bottom - body.getBoundingClientRect().bottom;
+      if (over > 0) body.scrollBy({ top: over + 8, behavior: 'smooth' });
+    }, DOUBLE_MS + 40);
+    return () => clearTimeout(id);
+  }, [picked]);
+
+  // 한 번 누르면 고르고, 같은 날을 빠르게 두 번 누르면 플래너로 간다
+  // 달을 넘긴 직후 같은 숫자의 날을 누른 것은 두 번 누르기가 아니므로, 날짜 전체(key)로 비교한다
+  const lastTap = useRef<null | { key: string; t: number }>(null);
+  const hold = useRef(0);
+  const tap = (d: number) => {
+    const t = performance.now();
+    const key = dayKey(year, month, d);
+    const last = lastTap.current;
+    if (last && last.key === key && t - last.t < DOUBLE_MS) {
+      lastTap.current = null;
+      onPick(d);
+      return;
+    }
+    lastTap.current = { key, t };
+    // 일정이 적은 날로 바꾸면 내용이 줄어 스크롤이 당겨지고 날짜 칸이 내려앉는다.
+    // 두 번째 누름이 같은 칸에 떨어지도록, 판정이 끝날 때까지 일정 영역의 높이를 잡아 둔다
+    const box = eventsRef.current;
+    if (box) {
+      box.style.minHeight = `${box.offsetHeight}px`;
+      clearTimeout(hold.current);
+      hold.current = window.setTimeout(() => {
+        box.style.minHeight = '';
+      }, DOUBLE_MS);
+    }
+    onSelect(key);
+  };
+  useEffect(() => () => clearTimeout(hold.current), []);
 
   return (
     <div {...stylex.props(s.root, leaving && s.leaving)} {...swipe}>
@@ -186,7 +232,8 @@ export function Calendar({ year, month, leaving, onPick, onClose, onStep }: Prop
         </div>
       </div>
 
-      <div ref={bodyRef} {...stylex.props(s.body)} style={{ translate: `0 ${-lift}px` }}>
+      <div ref={bodyRef} {...stylex.props(s.body)} style={{ paddingTop: pad }}>
+        <div ref={baseRef}>
         <div {...stylex.props(s.head)}>
           <h2 key={month} {...stylex.props(s.num)} aria-label={`${year}년 ${month}월`}>
             {month}
@@ -195,6 +242,9 @@ export function Calendar({ year, month, leaving, onPick, onClose, onStep }: Prop
             <span {...stylex.props(s.en)}>{MONTHS_EN[month - 1]}</span>
             <span {...stylex.props(s.yr)}>{year}</span>
           </div>
+        </div>
+        <div {...stylex.props(s.motto)}>
+          <MonthMotto key={`${year}-${month}`} year={year} month={month} />
         </div>
         <div {...stylex.props(s.bar)}>
           <FlowBar progress={() => monthProgress(year, month, now())} />
@@ -218,16 +268,19 @@ export function Calendar({ year, month, leaving, onPick, onClose, onStep }: Prop
             const has = dayHasContent(entry);
             const pens = has ? usedPens(entry) : [];
             const isToday = key === todayKey;
+            const isPicked = key === picked;
+            const plans = entry?.events?.length ?? 0;
             const idx = offset + i;
             const wd = WEEKDAYS[idx % 7];
             return (
               <button
                 key={d}
                 type="button"
-                aria-label={`${month}월 ${d}일 ${wd}${isToday ? ', 오늘' : ''}${has ? ', 기록 있음' : ''}`}
+                aria-label={`${month}월 ${d}일 ${wd}${isToday ? ', 오늘' : ''}${has ? ', 기록 있음' : ''}${plans ? `, 일정 ${plans}건` : ''}`}
                 aria-current={isToday ? 'date' : undefined}
-                onClick={() => onPick(d)}
-                {...stylex.props(s.cell, key < todayKey && s.past, isToday && s.today)}
+                aria-pressed={isPicked}
+                onClick={() => tap(d)}
+                {...stylex.props(s.cell, key < todayKey && s.past, isToday && s.today, isPicked && s.picked)}
                 style={{ animationDelay: `${260 + Math.floor(idx / 7) * 45 + (idx % 7) * 16}ms` }}
               >
                 {isToday && <span aria-hidden {...stylex.props(s.ringWrap)} />}
@@ -248,9 +301,12 @@ export function Calendar({ year, month, leaving, onPick, onClose, onStep }: Prop
             );
           })}
         </div>
-        <div ref={mottoRef} {...stylex.props(s.motto)}>
-          <MonthMotto key={`${year}-${month}`} year={year} month={month} />
         </div>
+        {picked && (
+          <div ref={eventsRef}>
+            <DayEvents key={picked} dateKey={picked} onOpenPlanner={() => onPick(+picked.slice(8))} />
+          </div>
+        )}
       </div>
     </div>
   );
