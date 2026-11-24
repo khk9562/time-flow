@@ -2,7 +2,7 @@ import * as stylex from '@stylexjs/stylex';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { color, ease, type } from '../tokens.stylex';
-import { NO_SWIPE, ui, usePresence } from './ui';
+import { NO_SWIPE, ui, useKeyboardInset, usePresence } from './ui';
 
 /*
  * 바텀시트 / 드로어.
@@ -61,6 +61,10 @@ const s = stylex.create({
     animationTimingFunction: ease.out,
     animationFillMode: 'both',
     willChange: 'transform',
+    // 키보드가 올라오면 그 높이만큼 위로 올라간다
+    transitionProperty: 'bottom',
+    transitionDuration: '260ms',
+    transitionTimingFunction: ease.out,
   },
   panelOut: {
     animationName: { default: drawerOut, [PHONE]: sheetOut },
@@ -68,7 +72,7 @@ const s = stylex.create({
     animationTimingFunction: ease.inOut,
   },
   // 끌기는 transform(등장 애니메이션)과 겹치지 않게 translate 로 따로 움직인다
-  settle: { transitionProperty: 'translate', transitionDuration: '360ms', transitionTimingFunction: ease.spring },
+  settle: { transitionProperty: 'translate, bottom', transitionDuration: '360ms', transitionTimingFunction: ease.spring },
   grip: {
     display: { default: 'none', [PHONE]: 'flex' },
     justifyContent: 'center',
@@ -129,6 +133,8 @@ export function Sheet({ open, onClose, title, subtitle, children }: Props) {
   const titleId = useId();
   const close = useRef(onClose);
   close.current = onClose;
+  // 시트 안에서 글을 쓸 때 화면 키보드가 시트를 가리지 않게 한다
+  const keyboard = useKeyboardInset(open);
 
   useEffect(() => {
     if (!open) return;
@@ -136,7 +142,10 @@ export function Sheet({ open, onClose, title, subtitle, children }: Props) {
     setSettling(false);
     opener.current = document.activeElement;
     const id = requestAnimationFrame(() => {
-      const first = panel.current?.querySelector<HTMLElement>('[data-autofocus], button, [href], input');
+      // 먼저 초점을 받을 곳을 정해 둔 시트(입력칸 등)는 그곳으로, 아니면 첫 버튼으로
+      const first =
+        panel.current?.querySelector<HTMLElement>('[data-autofocus]') ??
+        panel.current?.querySelector<HTMLElement>('button, [href], input');
       first?.focus({ preventScroll: true });
     });
     // 가장 먼저 받아서 삼킨다: 시트를 닫는 Esc 가 화면의 "한 단계 뒤로"까지 일으키지 않게
@@ -201,7 +210,10 @@ export function Sheet({ open, onClose, title, subtitle, children }: Props) {
         aria-modal="true"
         aria-labelledby={titleId}
         {...stylex.props(s.panel, leaving && s.panelOut, settling && s.settle)}
-        style={{ translate: `0 ${dy}px` }}
+        style={{
+          translate: `0 ${dy}px`,
+          ...(keyboard ? { bottom: keyboard, maxHeight: `calc(100dvh - 48px - ${keyboard}px)` } : null),
+        }}
       >
         <div aria-hidden {...stylex.props(s.grip)} {...dragHandlers} />
         <div {...stylex.props(s.head)} {...dragHandlers}>

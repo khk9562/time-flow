@@ -4,7 +4,8 @@ import { atmosphere, atmosphereSnapshot, subscribeAtmosphere } from '../lib/atmo
 import {
   formatMinutes, getDay, getYearPlan, PEN_COLORS, penRGB, updateDay, updateTask, useDB, type Goal, type Task,
 } from '../lib/store';
-import { dayKey, pad2, useSlowNow, WEEKDAYS, WEEKDAYS_EN } from '../lib/time';
+import { upcomingEvents } from '../lib/events';
+import { dayKey, pad2, parseDayKey, useSlowNow, WEEKDAYS, WEEKDAYS_EN } from '../lib/time';
 import { color, dur, ease, radius, type } from '../tokens.stylex';
 import { Sheet, sheetItem } from './Sheet';
 import { Timeline } from './Timeline';
@@ -91,6 +92,8 @@ const s = stylex.create({
   },
   field: { display: 'flex', alignItems: 'flex-start', gap: 10, minWidth: 0 },
   thick: { paddingBottom: 7, borderBottomWidth: 1.5, borderBottomStyle: 'solid', borderBottomColor: color.lineStrong },
+  // 입력칸 옆에 버튼이 붙는 칸: 이름표와 입력칸만 label 로 묶는다
+  fieldMain: { display: 'flex', alignItems: 'flex-start', gap: 10, flexGrow: 1, minWidth: 0 },
   fieldLabel: { lineHeight: `${LINE}px`, flexShrink: 0 },
   // 줄마다 밑줄이 그어진 필기 칸
   ruled: {
@@ -99,6 +102,9 @@ const s = stylex.create({
     fontSize: type.body,
     fontWeight: 500,
     lineHeight: `${LINE}px`,
+    // 좁은 칸에서도 낱말 가운데에서 줄이 바뀌지 않게
+    wordBreak: 'keep-all',
+    overflowWrap: 'break-word',
     color: color.ink,
     backgroundImage: `linear-gradient(to bottom, transparent ${LINE - 1}px, ${color.line} ${LINE - 1}px)`,
     backgroundSize: `100% ${LINE}px`,
@@ -350,6 +356,83 @@ function RoutinePicker({
         )}
       </Sheet>
     </div>
+  );
+}
+
+const dd = stylex.create({
+  // 입력 한 줄과 같은 높이의 작은 + 네모. 누르는 범위는 보이는 것보다 넓다
+  btn: {
+    position: 'relative',
+    flexShrink: 0,
+    width: LINE,
+    height: LINE,
+    '::after': { content: '""', position: 'absolute', inset: -9 },
+  },
+  label: { flexShrink: 0, minWidth: 64, fontSize: 20, fontWeight: 200, color: color.ink, fontVariantNumeric: 'tabular-nums' },
+  texts: { display: 'flex', flexDirection: 'column', gap: 2, flexGrow: 1, minWidth: 0 },
+  date: { fontSize: type.small, fontWeight: 500, color: color.inkSoft },
+});
+
+const dayText = (key: string) => {
+  const d = parseDayKey(key);
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 ${WEEKDAYS[d.getDay()]}`;
+};
+
+/** D-Day 칸 옆의 + 네모: 다가오는 일정을 고르면 남은 날을 계산해 칸에 적는다 */
+function DdayPicker({ dateKey, value, onChange }: { dateKey: string; value: string; onChange: (v: string) => void }) {
+  const db = useDB();
+  const [open, setOpen] = useState(false);
+  const events = open ? upcomingEvents(db.days, dateKey) : [];
+  const lines = value.split('\n').map((l) => l.trim());
+  const choose = (line: string) => {
+    // 이미 적힌 일정은 다시 적지 않는다
+    if (!lines.includes(line)) onChange(value.trim() ? `${value.trimEnd()}\n${line}` : line);
+    setOpen(false);
+  };
+  return (
+    <>
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label="일정에서 디데이 고르기"
+        title="일정에서 디데이 고르기"
+        onClick={() => setOpen(true)}
+        {...stylex.props(pick.btn, dd.btn, open && pick.btnOpen)}
+      >
+        <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+          <path d="M5 1.5v7M1.5 5h7" />
+        </svg>
+      </button>
+      <Sheet open={open} onClose={() => setOpen(false)} title="디데이 고르기" subtitle="고른 일정까지 남은 날을 적어 드려요">
+        {events.length === 0 ? (
+          <p {...stylex.props(pick.empty)}>이 날 이후로 등록된 일정이 없어요. 달력에서 날짜를 고르고 일정을 추가해 주세요.</p>
+        ) : (
+          <div {...stylex.props(pick.list)}>
+            {events.map((ev, i) => {
+              const line = `${ev.label} ${ev.title}`;
+              const on = lines.includes(line);
+              return (
+                <button
+                  key={`${ev.date}:${ev.id}`}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => choose(line)}
+                  {...stylex.props(pick.item, sheetItem.enter, on && pick.itemOn)}
+                  style={{ animationDelay: `${120 + Math.min(i, 8) * 60}ms` }}
+                >
+                  <span {...stylex.props(dd.label)}>{ev.label}</span>
+                  <span {...stylex.props(dd.texts)}>
+                    <span {...stylex.props(pick.itemText)}>{ev.title}</span>
+                    <span {...stylex.props(dd.date)}>{dayText(ev.date)}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </Sheet>
+    </>
   );
 }
 
@@ -612,10 +695,13 @@ export function Planner({ year, month, day, leaving, onBack, onStep }: Props) {
                 <span {...stylex.props(s.ymdDay)}>{WEEKDAYS_EN[date.getDay()]}</span>
               </span>
             </div>
-            <label {...stylex.props(s.field)}>
-              <span {...stylex.props(ui.label, s.fieldLabel)}>D-Day</span>
-              <AutoTextarea value={entry.dday} onChange={(e) => updateDay(key, { dday: e.target.value })} xstyle={s.ruled} />
-            </label>
+            <div {...stylex.props(s.field)}>
+              <label {...stylex.props(s.fieldMain)}>
+                <span {...stylex.props(ui.label, s.fieldLabel)}>D-Day</span>
+                <AutoTextarea value={entry.dday} onChange={(e) => updateDay(key, { dday: e.target.value })} xstyle={s.ruled} />
+              </label>
+              <DdayPicker dateKey={key} value={entry.dday} onChange={(dday) => updateDay(key, { dday })} />
+            </div>
             <label {...stylex.props(s.field, s.thick)}>
               <span {...stylex.props(ui.label, s.fieldLabel)}>Comment</span>
               <AutoTextarea
